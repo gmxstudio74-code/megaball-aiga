@@ -1,0 +1,41 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&display=swap');
+
+@theme {
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: #000;
+  overflow: hidden;
+  user-select: none;
+}
+
+@keyframes copper-move {
+  0%, 100% { transform: translateY(0) translateZ(0); opacity: 0.2; }
+  50% { transform: translateY(20cqh) translateZ(0); opacity: 0.5; }
+}
+
+.copper-bar {
+  height: 4cqh;
+  width: 100%;
+  animation: copper-move 4s ease-in-out infinite;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+}
+
+.scroller-char {
+  display: inline-block;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.scroller-container {
+  display: flex;
+  white-space: nowrap;
+  height: 100%;
+  align-items: center;
+  will-change: transform;
+}

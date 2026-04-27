@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "HighScore": {
+      "title": "HighScore",
+      "description": "A high score entry in the Hall of Fame",
+      "type": "object",
+      "properties": {
+        "playerName": {
+          "type": "string",
+          "description": "The name of the player"
+        },
+        "score": {
+          "type": "integer",
+          "description": "The score achieved"
+        },
+        "level": {
+          "type": "integer",
+          "description": "The level reached"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the score was achieved"
+        }
+      },
+      "required": ["playerName", "score", "level", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/highScores/{scoreId}": {
+      "schema": "HighScore",
+      "description": "Collection of high scores"
+    }
+  }
+}

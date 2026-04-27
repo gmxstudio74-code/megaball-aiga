@@ -1,0 +1,33 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: highScores
+    // Document ID: auto-generated
+    // Fields:
+    //   - playerName: string (required, 1-20 chars)
+    //   - score: number (required, positive)
+    //   - level: number (required, positive)
+    //   - timestamp: timestamp (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isValidHighScore(data) {
+      return data.keys().hasAll(['playerName', 'score', 'level', 'timestamp']) &&
+             data.playerName is string && data.playerName.size() >= 1 && data.playerName.size() <= 20 &&
+             data.score is number && data.score >= 0 &&
+             data.level is number && data.level >= 1 &&
+             data.timestamp is timestamp;
+    }
+
+    match /highScores/{scoreId} {
+      allow read: if true;
+      allow create: if isValidHighScore(request.resource.data);
+      allow update, delete: if false;
+    }
+  }
+}
