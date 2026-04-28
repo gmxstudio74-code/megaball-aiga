@@ -410,7 +410,11 @@ export const Game: React.FC = () => {
     x: (GAME_WIDTH - PADDLE_WIDTH) / 2,
     width: PADDLE_WIDTH,
     hasLaser: false,
-    spawnTimer: 0 // 0 to 100
+    spawnTimer: 0, // 0 to 100
+    damageTimer: 0, // For life lost animation
+    effectTimer: 0, // For power-up initialization animation
+    effectType: null as PowerUpType | null,
+    fireTimer: 0 // For firing pulse
   });
   const ballsRef = useRef<Ball[]>([]);
   const powerUpsRef = useRef<PowerUp[]>([]);
@@ -935,7 +939,11 @@ export const Game: React.FC = () => {
             }
           }).catch((err: any) => {
             console.error(`Fullscreen failed: ${err.message}`);
+            // Fallback: at least toggle the internal state for "pseudo-fullscreen"
+            setIsFullscreen(true);
           });
+        } else {
+          setIsFullscreen(true);
         }
       }
     } else {
@@ -943,9 +951,31 @@ export const Game: React.FC = () => {
       if (exitMethod) {
         exitMethod.call(doc);
         setIsFullscreen(false);
+      } else {
+        setIsFullscreen(false);
       }
     }
   };
+
+  useEffect(() => {
+    const handleFsChange = () => {
+      const doc = document as any;
+      const isActuallyFullscreen = !!(doc.fullscreenElement || doc.mozFullScreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement);
+      setIsFullscreen(isActuallyFullscreen);
+    };
+
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    document.addEventListener('mozfullscreenchange', handleFsChange);
+    document.addEventListener('MSFullscreenChange', handleFsChange);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+      document.removeEventListener('mozfullscreenchange', handleFsChange);
+      document.removeEventListener('MSFullscreenChange', handleFsChange);
+    };
+  }, []);
 
   useEffect(() => {
     const handleGlobalMove = (e: MouseEvent | TouchEvent) => {
@@ -1200,8 +1230,38 @@ export const Game: React.FC = () => {
     powerUpsRef.current.push({ x, y, type, active: true, speed });
   };
 
+  const handleLifeLost = () => {
+    if (lives <= 1) {
+      setGameState('GAMEOVER');
+      audioService.playGameOver();
+      audioService.playVoice("Game over. You are defeated!");
+      setIsRespawning(false);
+      setLives(0);
+    } else {
+      setIsRespawning(true);
+      audioService.playSfx('lose');
+      audioService.playVoice("Life lost!");
+      setLives(l => l - 1);
+      setActivePowerUps(new Map());
+      setGhostPaddleActive(false);
+      paddleRef.current.damageTimer = 1000;
+      paddleRef.current.hasLaser = false;
+      paddleRef.current.width = PADDLE_WIDTH;
+      setTimeout(() => {
+        paddleRef.current.spawnTimer = 0; // Reset spawn timer for pop-in effect
+        paddleRef.current.damageTimer = 0;
+        resetBall(true);
+        setIsRespawning(false);
+      }, 1000);
+    }
+  };
+
   const applyPowerUp = (type: PowerUpType) => {
     audioService.playSfx('powerup');
+    
+    // Trigger paddle animation
+    paddleRef.current.effectTimer = 600; 
+    paddleRef.current.effectType = type;
     
     switch (type) {
       case PowerUpType.WIDE_PADDLE:
@@ -1284,19 +1344,7 @@ export const Game: React.FC = () => {
         });
         break;
       case PowerUpType.DEATH:
-        setLives(l => {
-          const newLives = Math.max(0, l - 1);
-          if (newLives === 0) {
-            setGameState('GAMEOVER');
-            audioService.playGameOver();
-            audioService.playVoice("Game over. Death claimed you!");
-          } else {
-            audioService.playSfx('lose');
-            audioService.playVoice("Death! Beware!");
-            setBrickShake(10);
-          }
-          return newLives;
-        });
+        handleLifeLost();
         break;
       case PowerUpType.FLOOR:
         setHasFloor(true);
@@ -1365,6 +1413,15 @@ export const Game: React.FC = () => {
     }
 
     const paddle = paddleRef.current;
+    if (paddle.damageTimer > 0) {
+      paddle.damageTimer -= delta;
+    }
+    if (paddle.effectTimer > 0) {
+      paddle.effectTimer -= delta;
+    }
+    if (paddle.fireTimer > 0) {
+      paddle.fireTimer -= delta;
+    }
     let speedMultiplier = isNaN(delta) || delta > 100 ? 1 : delta / 16.67; 
     
     if (timeShiftActive) {
@@ -1730,23 +1787,8 @@ export const Game: React.FC = () => {
     ballsRef.current = ballsRef.current.filter(ball => ball.y - BALL_RADIUS < GAME_HEIGHT);
 
     // Bottom collision (Lose life if no balls left)
-    if (ballsRef.current.length === 0) {
-      if (lives <= 1) {
-        setGameState('GAMEOVER');
-        audioService.playGameOver();
-        audioService.playVoice("Game over. You are defeated!");
-        setIsRespawning(false);
-        setLives(0);
-      } else {
-        setIsRespawning(true);
-        audioService.playSfx('lose');
-        audioService.playVoice("Life lost!");
-        setLives(l => l - 1);
-        setTimeout(() => {
-          resetBall(true);
-          setIsRespawning(false);
-        }, 1000);
-      }
+    if (ballsRef.current.length === 0 && !isRespawning && gameState === 'PLAYING') {
+      handleLifeLost();
     }
 
     // Physical Objects Interaction
@@ -1932,6 +1974,7 @@ export const Game: React.FC = () => {
         lasersRef.current.push({ x: paddle.x + paddle.width - 10, y: GAME_HEIGHT - PADDLE_HEIGHT, active: true });
         lastLaserTimeRef.current = now;
         audioService.playSfx('laser');
+        paddleRef.current.fireTimer = 200; // Trigger firing pulse
       }
     }
 
@@ -2276,12 +2319,46 @@ export const Game: React.FC = () => {
     ctx.translate(centerX, centerY);
     ctx.scale(spawnProgress, spawnProgress);
     ctx.translate(-centerX, -centerY);
-    ctx.globalAlpha = spawnProgress;
+
+    // Life Lost Animation (Implosion to point)
+    let fadeAlpha = 1;
+    if (paddle.damageTimer > 0) {
+      // Implosion: scale quickly to 0, fade out
+      fadeAlpha = Math.max(0, paddle.damageTimer / 1000);
+      const implosionScale = Math.pow(fadeAlpha, 2.5); // Much sharper implosion
+      
+      ctx.translate(centerX, centerY);
+      ctx.scale(implosionScale, implosionScale);
+      ctx.rotate((1 - fadeAlpha) * 8); // Rapid spin
+      ctx.translate(-centerX, -centerY);
+      
+      // Energy particles focusing inward
+      if (Math.random() > 0.2) {
+        ctx.fillStyle = '#ffffff';
+        ctx.shadowBlur = 20;
+        ctx.shadowColor = '#00ff00';
+        const dist = 40 * fadeAlpha;
+        const angle = Math.random() * Math.PI * 2;
+        ctx.fillRect(centerX + Math.cos(angle) * dist, centerY + Math.sin(angle) * dist, 3, 3);
+      }
+    }
+
+    // Firing/Action Pulse
+    if (paddle.fireTimer > 0) {
+      const pulseScale = 1 + (paddle.fireTimer / 200) * 0.15;
+      ctx.translate(centerX, centerY);
+      ctx.scale(pulseScale, pulseScale);
+      ctx.translate(-centerX, -centerY);
+    }
+
+    ctx.globalAlpha = Math.min(1, Math.max(0, spawnProgress * fadeAlpha));
 
     if (level === 3) {
       // 8-bit style
+      let primaryColor = COLORS.paddle;
+      
       ctx.shadowBlur = 0;
-      ctx.fillStyle = COLORS.paddle;
+      ctx.fillStyle = primaryColor;
       ctx.fillRect(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT, paddle.width, PADDLE_HEIGHT);
       
       // Simple 8-bit highlight
@@ -2295,24 +2372,161 @@ export const Game: React.FC = () => {
       ctx.fillRect(paddle.x + paddle.width - 4, GAME_HEIGHT - PADDLE_HEIGHT, 4, PADDLE_HEIGHT);
     } else {
       // AGA style
-      const paddleGrad = ctx.createLinearGradient(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT, paddle.x, GAME_HEIGHT);
-      paddleGrad.addColorStop(0, '#00ff00');
-      paddleGrad.addColorStop(0.3, '#ffffff');
-      paddleGrad.addColorStop(0.5, '#00ff00');
-      paddleGrad.addColorStop(1, '#004400');
-      ctx.fillStyle = paddleGrad;
-      ctx.fillRect(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT, paddle.width, PADDLE_HEIGHT);
-      
-      // Paddle lights
-      ctx.fillStyle = '#ff0000';
-      ctx.fillRect(paddle.x + 5, GAME_HEIGHT - PADDLE_HEIGHT + 5, 4, 4);
-      ctx.fillRect(paddle.x + paddle.width - 9, GAME_HEIGHT - PADDLE_HEIGHT + 5, 4, 4);
+      let basePrimary = '#00ff00';
+      let baseSecondary = '#004400';
+      let glowColor = '#00ff00';
+      let showGuns = false;
+      let showGlue = false;
+      let paddleCornerRadius = 4;
 
-      // Paddle glow
-      ctx.shadowBlur = 25 * spawnProgress;
-      ctx.shadowColor = '#00ff00';
-      ctx.strokeStyle = '#00ff00';
-      ctx.strokeRect(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT, paddle.width, PADDLE_HEIGHT);
+      // Professional Textures & Detailing
+      if (activePowerUps.has(PowerUpType.LASER)) {
+        basePrimary = '#ff3333';
+        baseSecondary = '#440000';
+        glowColor = '#ff0000';
+        showGuns = true;
+        paddleCornerRadius = 0; // Sharp edges for scifi look
+      } else if (activePowerUps.has(PowerUpType.GLUE)) {
+        basePrimary = '#ffee00';
+        baseSecondary = '#664400';
+        glowColor = '#ffff00';
+        showGlue = true;
+        paddleCornerRadius = 12; // Very rounded for sticky look
+      } else if (ghostPaddleActive) {
+        basePrimary = '#8888ff';
+        baseSecondary = '#222244';
+        glowColor = '#aaaaff';
+        paddleCornerRadius = 6;
+      }
+
+      // Draw Main Body with Beveled Look
+      const paddleGrad = ctx.createLinearGradient(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT, paddle.x, GAME_HEIGHT);
+      paddleGrad.addColorStop(0, baseSecondary);
+      paddleGrad.addColorStop(0.2, basePrimary);
+      paddleGrad.addColorStop(0.3, '#ffffff'); // Glint
+      paddleGrad.addColorStop(0.5, basePrimary);
+      paddleGrad.addColorStop(1, baseSecondary);
+      
+      ctx.fillStyle = paddleGrad;
+      
+      // Use different shapes based on power-up
+      ctx.beginPath();
+      if (showGlue) {
+        // Convex/Bulging ends for Glue
+        const arcRadius = 14;
+        ctx.moveTo(paddle.x + arcRadius, GAME_HEIGHT - PADDLE_HEIGHT);
+        ctx.lineTo(paddle.x + paddle.width - arcRadius, GAME_HEIGHT - PADDLE_HEIGHT);
+        ctx.quadraticCurveTo(paddle.x + paddle.width + 12, GAME_HEIGHT - PADDLE_HEIGHT/2, paddle.x + paddle.width - arcRadius, GAME_HEIGHT);
+        ctx.lineTo(paddle.x + arcRadius, GAME_HEIGHT);
+        ctx.quadraticCurveTo(paddle.x - 12, GAME_HEIGHT - PADDLE_HEIGHT/2, paddle.x + arcRadius, GAME_HEIGHT - PADDLE_HEIGHT);
+      } else {
+        ctx.roundRect(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT, paddle.width, PADDLE_HEIGHT, paddleCornerRadius);
+      }
+      ctx.fill();
+
+      // Mechanical Plating detail
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.setLineDash([]);
+      ctx.lineWidth = 1;
+      for (let i = 1; i < 4; i++) {
+        const px = paddle.x + (paddle.width / 4) * i;
+        ctx.beginPath();
+        ctx.moveTo(px, GAME_HEIGHT - PADDLE_HEIGHT + 2);
+        ctx.lineTo(px, GAME_HEIGHT - 2);
+        ctx.stroke();
+      }
+
+      // Laser Cannons (Detailed with Deploying Mechanical Wings)
+      if (showGuns) {
+        const wingDeploy = Math.min(1, (POWERUP_DURATION - (activePowerUps.get(PowerUpType.LASER) || 0)) / 500); 
+        const wingAngle = wingDeploy * 0.5;
+        
+        ctx.save();
+        ctx.fillStyle = '#333333';
+        // Left Wing
+        ctx.translate(paddle.x, GAME_HEIGHT - PADDLE_HEIGHT / 2);
+        ctx.rotate(-wingAngle);
+        ctx.beginPath();
+        ctx.moveTo(0, -PADDLE_HEIGHT/2);
+        ctx.lineTo(-24, -PADDLE_HEIGHT/2 + 3);
+        ctx.lineTo(-24, PADDLE_HEIGHT/2 - 3);
+        ctx.lineTo(0, PADDLE_HEIGHT/2);
+        ctx.fill();
+        // Barrel on wing
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(-22, -PADDLE_HEIGHT / 2 - 16, 5, 20);
+        ctx.restore();
+
+        ctx.save();
+        ctx.fillStyle = '#333333';
+        // Right Wing
+        ctx.translate(paddle.x + paddle.width, GAME_HEIGHT - PADDLE_HEIGHT / 2);
+        ctx.rotate(wingAngle);
+        ctx.beginPath();
+        ctx.moveTo(0, -PADDLE_HEIGHT/2);
+        ctx.lineTo(24, -PADDLE_HEIGHT/2 + 3);
+        ctx.lineTo(24, PADDLE_HEIGHT/2 - 3);
+        ctx.lineTo(0, PADDLE_HEIGHT/2);
+        ctx.fill();
+        // Barrel on wing
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(17, -PADDLE_HEIGHT / 2 - 16, 5, 20);
+        ctx.restore();
+      }
+
+      // Scifi Force Field for Glue/Sticky Mode
+      if (showGlue) {
+        const slimePulse = Math.sin(Date.now() / 300) * 0.5 + 0.5;
+        ctx.save();
+        
+        // Aura glow
+        ctx.globalAlpha = 0.2 + slimePulse * 0.15;
+        const slimeGrad = ctx.createRadialGradient(centerX, centerY - 10, 5, centerX, centerY - 10, paddle.width / 2 + 30);
+        slimeGrad.addColorStop(0, '#ffff00');
+        slimeGrad.addColorStop(1, 'transparent');
+        ctx.fillStyle = slimeGrad;
+        ctx.beginPath();
+        ctx.ellipse(centerX, centerY - 8, paddle.width / 2 + 20, 30, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Animated Force Ripples
+        ctx.strokeStyle = 'rgba(255, 255, 100, 0.4)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 3; i++) {
+          const ripple = (Date.now() / 1500 + i / 3) % 1;
+          const rx = paddle.width / 2 + 10 + ripple * 20;
+          const ry = 15 + ripple * 15;
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY - 8, rx, ry, 0, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        // Rising Particles (Sticky Vapor)
+        for (let i = 0; i < 6; i++) {
+          const time = (Date.now() / 1200 + i * 0.7) % 1;
+          const px = paddle.x + (paddle.width * (i / 5));
+          const py = GAME_HEIGHT - PADDLE_HEIGHT - (time * 25);
+          ctx.fillStyle = `rgba(255, 255, 0, ${0.8 * (1 - time)})`;
+          ctx.beginPath();
+          ctx.arc(px, py, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.restore();
+      }
+
+      // Internal Lights (Pulsing)
+      const lightPulse = Math.sin(Date.now() / 150) * 0.5 + 0.5;
+      ctx.fillStyle = showGuns ? `rgba(255, 255, 255, ${0.4 + lightPulse * 0.6})` : (showGlue ? `rgba(255, 255, 0, ${0.4 + lightPulse * 0.6})` : `rgba(255, 0, 0, ${0.4 + lightPulse * 0.6})`);
+      ctx.fillRect(paddle.x + 12, GAME_HEIGHT - PADDLE_HEIGHT + 7, 8, 2);
+      ctx.fillRect(paddle.x + paddle.width - 20, GAME_HEIGHT - PADDLE_HEIGHT + 7, 8, 2);
+
+      // Final Glow effect
+      ctx.shadowBlur = (20 + lightPulse * 15) * spawnProgress;
+      ctx.shadowColor = glowColor;
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
 
     if (ghostPaddleActive && level !== 3) {
@@ -3027,8 +3241,13 @@ export const Game: React.FC = () => {
                   <h1 className="text-[min(10cqw,12cqh)] font-black italic tracking-tighter text-white mb-[0.2cqw] drop-shadow-[0_0_30px_rgba(0,255,0,1)] leading-none">
                     MEGABALL <span className="text-red-500">Ai</span><span className="text-green-500">GA</span>
                   </h1>
-                  <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
-                  <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse">Click to activate sound & start</p>
+                  <div className="flex flex-col items-center">
+                    <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
+                    <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
+                      RELEASE v1.5.0428.0756
+                    </div>
+                  </div>
+                  <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
                 </motion.div>
 
                 <div className="flex flex-col items-center gap-[1cqh]">
@@ -3123,16 +3342,16 @@ export const Game: React.FC = () => {
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 overflow-hidden"
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 overflow-hidden"
             >
-              <div className="text-center p-[2cqw] border-[0.2cqw] border-green-500 bg-black shadow-[0_0_40px_rgba(0,255,0,0.15)] max-w-[85cqw] w-full mx-[2cqw] relative overflow-hidden rounded-md flex flex-col max-h-[95cqh]">
+              <div className="text-center p-[1.5cqw] border-[0.2cqw] border-green-500 bg-black shadow-[0_0_30px_rgba(0,255,0,0.2)] max-w-[65cqw] w-full mx-[2cqw] relative overflow-hidden rounded-md flex flex-col max-h-[85cqh]">
                 {/* Background decorative elements */}
                 <div className="absolute top-0 left-0 w-full h-[0.1cqw] bg-gradient-to-r from-transparent via-green-500 to-transparent animate-pulse" />
                 <div className="absolute bottom-0 left-0 w-full h-[0.1cqw] bg-gradient-to-r from-transparent via-green-500 to-transparent animate-pulse" />
                 
-                <div className="flex-1 overflow-y-auto custom-scrollbar px-[1cqw] py-[2cqw]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-[0.8cqw] py-[1.2cqw]">
                   {gameState === 'LEVEL_COMPLETE' ? (
-                    <div className="flex flex-col items-center py-[1cqw]">
+                    <div className="flex flex-col items-center py-[0.5cqw]">
                       <motion.div
                         animate={{ 
                           scale: [1, 1.1, 1],
@@ -3140,43 +3359,43 @@ export const Game: React.FC = () => {
                         }}
                         transition={{ duration: 1.5, repeat: Infinity }}
                       >
-                        <Zap className="w-[4cqw] h-[4cqw] text-blue-400 mb-[0.8cqw] drop-shadow-[0_0_15px_rgba(96,165,250,0.8)]" />
+                        <Zap className="w-[3cqw] h-[3cqw] text-blue-400 mb-[0.6cqw] drop-shadow-[0_0_10px_rgba(96,165,250,0.8)]" />
                       </motion.div>
                       
-                      <h2 className="text-[4cqw] font-black italic text-blue-500 mb-[0.2cqw] tracking-tighter drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] leading-none uppercase">Sector Clear</h2>
-                      <p className="text-blue-400/60 mb-[1.5cqw] uppercase tracking-[0.4em] font-bold text-[1.2cqw]">Mission Objective Achieved</p>
+                      <h2 className="text-[3.2cqw] font-black italic text-blue-500 mb-[0.1cqw] tracking-tighter drop-shadow-[0_0_6px_rgba(59,130,246,0.5)] leading-none uppercase">Sector Clear</h2>
+                      <p className="text-blue-400/60 mb-[1.2cqw] uppercase tracking-[0.4em] font-bold text-[1cqw]">Mission Objective Achieved</p>
                       
                       <button
                         onClick={startNextLevel}
-                        className="group relative flex items-center justify-center gap-[1cqw] px-[4cqw] py-[1cqw] bg-blue-600 hover:bg-blue-500 text-black font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95"
+                        className="group relative flex items-center justify-center gap-[0.8cqw] px-[3cqw] py-[0.8cqw] bg-blue-600 hover:bg-blue-500 text-black font-black text-[1.4cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_15px_rgba(37,99,235,0.4)] active:scale-95"
                       >
-                        <Play className="w-[1.8cqw] h-[1.8cqw]" fill="black" />
+                        <Play className="w-[1.4cqw] h-[1.4cqw]" fill="black" />
                         CONTINUE
                         <div className="absolute -inset-[0.2cqw] border-[0.1cqw] border-blue-300 opacity-0 group-hover:opacity-100 transition-opacity animate-pulse" />
                       </button>
                       
-                      <p className="mt-[1.5cqw] text-blue-400/40 text-[1cqw] uppercase tracking-widest animate-pulse">Click or press any key to proceed</p>
+                      <p className="mt-[1.2cqw] text-blue-400/40 text-[0.8cqw] uppercase tracking-widest animate-pulse">Proceeding to next sector</p>
                     </div>
                   ) : gameState === 'WIN' ? (
-                    <div className="flex flex-col items-center py-[2cqw] relative">
+                    <div className="flex flex-col items-center py-[1.5cqw] relative">
                       {winBgImage && (
-                        <div className="absolute inset-0 opacity-20 pointer-events-none">
+                        <div className="absolute inset-0 opacity-15 pointer-events-none">
                           <img src={winBgImage.src} alt="" className="w-full h-full object-cover" />
                         </div>
                       )}
                       <div className="relative z-10 flex flex-col items-center">
-                        <Trophy className="w-[8cqw] h-[8cqw] text-yellow-500 mb-[2cqw] animate-bounce" />
-                        <h2 className="text-[6cqw] font-black italic text-yellow-500 mb-[0.5cqw] tracking-tighter drop-shadow-[0_0_20px_rgba(234,179,8,0.8)] uppercase leading-none">Victory Over Space</h2>
-                        <p className="text-yellow-400/60 mb-[2cqw] uppercase tracking-[0.4em] font-bold text-[1.4cqw]">The Galaxy is Safe!</p>
-                        <div className="bg-green-500/10 border border-green-500/30 p-[2cqw] rounded-lg mb-[3cqw] max-w-[50cqw]">
-                           <p className="text-green-400 text-[1.4cqw] italic font-mono leading-relaxed">
+                        <Trophy className="w-[6cqw] h-[6cqw] text-yellow-500 mb-[1.5cqw] animate-bounce" />
+                        <h2 className="text-[4.5cqw] font-black italic text-yellow-500 mb-[0.4cqw] tracking-tighter drop-shadow-[0_0_15px_rgba(234,179,8,0.8)] uppercase leading-none">Victory Over Space</h2>
+                        <p className="text-yellow-400/60 mb-[1.5cqw] uppercase tracking-[0.4em] font-bold text-[1.1cqw]">The Galaxy is Safe!</p>
+                        <div className="bg-green-500/10 border border-green-500/30 p-[1.5cqw] rounded-lg mb-[2cqw] max-w-[50cqw]">
+                           <p className="text-green-400 text-[1.1cqw] italic font-mono leading-relaxed">
                              PILOT, YOUR BRAVERY HAS ENDED THE THREAT. ALL SECTORS ARE SECURE. THE GALAXY SALUTES YOU!
                            </p>
                         </div>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex flex-col items-center py-[1cqw]">
+                    <div className="flex flex-col items-center py-[0.5cqw]">
                       <motion.div
                         animate={{
                           scale: [1, 1.1, 1],
@@ -3184,60 +3403,60 @@ export const Game: React.FC = () => {
                         }}
                         transition={{ duration: 2, repeat: Infinity }}
                       >
-                        <h2 className="text-[5cqw] font-black italic text-red-600 mb-[0.8cqw] drop-shadow-[0_0_20px_rgba(220,38,38,0.8)] tracking-tighter leading-none uppercase">Mission Failed</h2>
+                        <h2 className="text-[3.5cqw] font-black italic text-red-600 mb-[0.6cqw] drop-shadow-[0_0_15px_rgba(220,38,38,0.8)] tracking-tighter leading-none uppercase">Mission Failed</h2>
                       </motion.div>
-                      <p className="text-red-500/60 mb-[1.5cqw] uppercase tracking-[0.5em] font-bold text-[1.4cqw]">System Overload - Game Over</p>
+                      <p className="text-red-500/60 mb-[1.2cqw] uppercase tracking-[0.5em] font-bold text-[1.1cqw]">System Overload - Game Over</p>
                     </div>
                   )}
                   
-                  <div className="flex flex-col items-center gap-[2cqw] mb-[2cqw]">
-                    <div className="p-[1.5cqw] border-[0.1cqw] border-green-500/30 bg-green-500/5 rounded-xl inline-block w-full max-w-[45cqw]">
-                      <span className="text-[1cqw] text-green-500/40 uppercase block mb-[0.2cqw] tracking-[0.3em]">Final Tactical Score</span>
-                      <span className="text-[5.5cqw] font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] leading-none">{score.toLocaleString()}</span>
+                  <div className="flex flex-col items-center gap-[1.5cqw] mb-[1.5cqw]">
+                    <div className="p-[1cqw] border-[0.1cqw] border-green-500/30 bg-green-500/5 rounded-xl inline-block w-full max-w-[40cqw]">
+                      <span className="text-[0.9cqw] text-green-500/40 uppercase block mb-[0.2cqw] tracking-[0.3em]">Final Tactical Score</span>
+                      <span className="text-[4.5cqw] font-black text-white tracking-tighter drop-shadow-[0_0_10px_rgba(255,255,255,0.4)] leading-none">{score.toLocaleString()}</span>
                     </div>
                     
                     {gameState === 'GAMEOVER' && !showHallOfFame && (
-                      <div className="mt-[1cqw] w-full max-w-[45cqw] space-y-[1.5cqw] bg-black/40 p-[1.5cqw] border border-yellow-500/20 rounded">
-                        <p className="text-yellow-500 text-[1.2cqw] uppercase tracking-widest font-bold">Transmit ID to Command</p>
-                        <div className="flex gap-[0.5cqw]">
+                      <div className="mt-[0.5cqw] w-full max-w-[40cqw] space-y-[1cqw] bg-black/40 p-[1cqw] border border-yellow-500/20 rounded">
+                        <p className="text-yellow-500 text-[1cqw] uppercase tracking-widest font-bold">Transmit ID to Command</p>
+                        <div className="flex gap-[0.4cqw]">
                           <input 
                             type="text"
                             maxLength={20}
                             value={playerName}
                             onChange={(e) => setPlayerName(e.target.value)}
                             placeholder="PILOT NAME"
-                            className="flex-1 bg-black border-2 border-green-500/50 text-green-500 px-[1.5cqw] py-[0.8cqw] text-[1.5cqw] focus:outline-none focus:border-green-400 uppercase font-bold"
+                            className="flex-1 bg-black border-2 border-green-500/50 text-green-500 px-[1cqw] py-[0.6cqw] text-[1.2cqw] focus:outline-none focus:border-green-400 uppercase font-bold"
                           />
                           <button 
                             onClick={submitScore}
                             disabled={!playerName.trim() || isSubmittingScore}
-                            className="bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-black px-[2cqw] rounded-sm transition-all shadow-[0_0_15px_rgba(0,255,0,0.3)]"
+                            className="bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-black px-[1.5cqw] rounded-sm transition-all shadow-[0_0_10px_rgba(0,255,0,0.3)]"
                           >
-                            <Send className="w-[2.5cqw] h-[2.5cqw]" />
+                            <Send className="w-[1.8cqw] h-[1.8cqw]" />
                           </button>
                         </div>
                       </div>
                     )}
 
-                    <div className="p-[1.2cqw] border-[0.1cqw] border-yellow-500/30 bg-yellow-500/5 rounded-xl inline-block w-full max-w-[35cqw]">
-                      <span className="text-[0.9cqw] text-yellow-500/40 uppercase block mb-[0.2cqw] tracking-[0.3em]">Sector High Score</span>
-                      <span className="text-[4cqw] font-black text-yellow-400 tracking-tighter drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] leading-none">{highScore.toLocaleString()}</span>
+                    <div className="p-[0.8cqw] border-[0.1cqw] border-yellow-500/30 bg-yellow-500/5 rounded-xl inline-block w-full max-w-[32cqw]">
+                      <span className="text-[0.8cqw] text-yellow-500/40 uppercase block mb-[0.2cqw] tracking-[0.3em]">Sector High Score</span>
+                      <span className="text-[3cqw] font-black text-yellow-400 tracking-tighter drop-shadow-[0_0_8px_rgba(250,204,21,0.4)] leading-none">{highScore.toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-[2cqw] mt-auto py-[2cqw] border-t border-white/5 bg-black z-10">
+                <div className="flex flex-wrap justify-center gap-[1.5cqw] mt-auto py-[1.2cqw] border-t border-white/5 bg-black z-10">
                   <button
                     onClick={gameState === 'LEVEL_COMPLETE' ? startNextLevel : startGame}
-                    className="flex items-center justify-center gap-[1cqw] px-[4cqw] py-[1.2cqw] bg-green-700 hover:bg-green-600 text-black font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_15px_rgba(0,255,0,0.2)]"
+                    className="flex items-center justify-center gap-[0.8cqw] px-[3cqw] py-[0.8cqw] bg-green-700 hover:bg-green-600 text-black font-black text-[1.4cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_15px_rgba(0,255,0,0.2)]"
                   >
-                    {gameState === 'LEVEL_COMPLETE' ? <Play className="w-[1.8cqw] h-[1.8cqw]" /> : <RotateCcw className="w-[1.8cqw] h-[1.8cqw]" />}
+                    {gameState === 'LEVEL_COMPLETE' ? <Play className="w-[1.4cqw] h-[1.4cqw]" /> : <RotateCcw className="w-[1.4cqw] h-[1.4cqw]" />}
                     {gameState === 'LEVEL_COMPLETE' ? 'NEXT MISSION' : 'TRY AGAIN'}
                   </button>
                   
                   <button
                     onClick={backToMenu}
-                    className="flex items-center justify-center gap-[1cqw] px-[4cqw] py-[1.2cqw] bg-transparent border-2 border-green-700 hover:bg-green-700/20 text-green-600 font-bold text-[1.8cqw] rounded-sm transition-all"
+                    className="flex items-center justify-center gap-[0.8cqw] px-[3cqw] py-[0.8cqw] bg-transparent border-2 border-green-700 hover:bg-green-700/20 text-green-600 font-bold text-[1.4cqw] rounded-sm transition-all"
                   >
                     BACK TO MENU
                   </button>
