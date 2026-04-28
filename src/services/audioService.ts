@@ -268,21 +268,21 @@ class AudioService {
         lOsc.stop(now + 0.5);
         break;
       case 'explosion':
-        // Brutal Deep Thump
+        // Brutal Sub Thump
         const thumpOsc = this.audioContext.createOscillator();
         const thumpGain = this.audioContext.createGain();
         thumpOsc.connect(thumpGain);
         thumpGain.connect(this.audioContext.destination);
         thumpOsc.type = 'sine';
-        thumpOsc.frequency.setValueAtTime(60, now);
-        thumpOsc.frequency.exponentialRampToValueAtTime(30, now + 0.8);
-        thumpGain.gain.setValueAtTime(0.5, now);
-        thumpGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        thumpOsc.frequency.setValueAtTime(80, now);
+        thumpOsc.frequency.exponentialRampToValueAtTime(10, now + 1.2);
+        thumpGain.gain.setValueAtTime(0.6, now);
+        thumpGain.gain.exponentialRampToValueAtTime(0.01, now + 1.2);
         thumpOsc.start(now);
-        thumpOsc.stop(now + 0.8);
+        thumpOsc.stop(now + 1.2);
 
-        // Crushing Noise Burst
-        const exNoiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 0.8, this.audioContext.sampleRate);
+        // Crushing Noise Layer
+        const exNoiseBuffer = this.audioContext.createBuffer(1, this.audioContext.sampleRate * 1.0, this.audioContext.sampleRate);
         const exData = exNoiseBuffer.getChannelData(0);
         for (let i = 0; i < exNoiseBuffer.length; i++) exData[i] = Math.random() * 2 - 1;
         const exSrc = this.audioContext.createBufferSource();
@@ -291,17 +291,31 @@ class AudioService {
         const exNGain = this.audioContext.createGain();
         const exFilter = this.audioContext.createBiquadFilter();
         exFilter.type = 'lowpass';
-        exFilter.frequency.setValueAtTime(4000, now);
-        exFilter.frequency.exponentialRampToValueAtTime(100, now + 0.8);
+        exFilter.frequency.setValueAtTime(2000, now);
+        exFilter.frequency.exponentialRampToValueAtTime(50, now + 1.0);
+        exFilter.Q.setValueAtTime(10, now); // Add resonance for more "grunt"
 
         exSrc.connect(exFilter);
         exFilter.connect(exNGain);
         exNGain.connect(this.audioContext.destination);
 
-        exNGain.gain.setValueAtTime(0.35, now);
-        exNGain.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
+        exNGain.gain.setValueAtTime(0.4, now);
+        exNGain.gain.exponentialRampToValueAtTime(0.01, now + 1.0);
         exSrc.start(now);
-        exSrc.stop(now + 0.8);
+        exSrc.stop(now + 1.0);
+
+        // High-frequency "shattering" layer
+        const shatOsc = this.audioContext.createOscillator();
+        const shatGain = this.audioContext.createGain();
+        shatOsc.type = 'sawtooth';
+        shatOsc.connect(shatGain);
+        shatGain.connect(this.audioContext.destination);
+        shatOsc.frequency.setValueAtTime(2000, now);
+        shatOsc.frequency.linearRampToValueAtTime(200, now + 0.3);
+        shatGain.gain.setValueAtTime(0.1, now);
+        shatGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        shatOsc.start(now);
+        shatOsc.stop(now + 0.3);
         break;
       case 'portal':
         const poOsc = this.audioContext.createOscillator();

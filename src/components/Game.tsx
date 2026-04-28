@@ -70,7 +70,7 @@ interface HighScoreEntry {
   timestamp: Timestamp;
 }
 
-export type BrickType = 'NORMAL' | 'SLIME' | 'TNT' | 'INVISIBLE' | 'SWITCH' | 'HARD';
+export type BrickType = 'NORMAL' | 'SLIME' | 'TNT' | 'INVISIBLE' | 'SWITCH' | 'HARD' | 'PORTAL' | 'FIRE' | 'ICE' | 'GHOST';
 
 interface Brick {
   x: number;
@@ -716,8 +716,12 @@ export const Game: React.FC = () => {
               if (currentLevel > 3) {
                 if (rand < 0.05) { type = 'TNT'; color = '#ff3300'; }
                 else if (rand < 0.10) { type = 'SLIME'; color = '#33ff33'; }
-                else if (rand < 0.15) { type = 'INVISIBLE'; revealed = false; color = '#444444'; }
-                else if (rand < 0.20 && currentLevel > 10) { type = 'HARD'; color = '#888888'; hits = 3; }
+                else if (rand < 0.13) { type = 'PORTAL'; color = '#aa00ff'; }
+                else if (rand < 0.16) { type = 'FIRE'; color = '#ff9900'; }
+                else if (rand < 0.19) { type = 'ICE'; color = '#00ffff'; }
+                else if (rand < 0.22) { type = 'GHOST'; color = 'rgba(255,255,255,0.4)'; }
+                else if (rand < 0.25) { type = 'INVISIBLE'; revealed = false; color = '#444444'; }
+                else if (rand < 0.30 && currentLevel > 10) { type = 'HARD'; color = '#888888'; hits = 3; }
               }
 
               bricks.push({
@@ -1292,13 +1296,16 @@ export const Game: React.FC = () => {
         audioService.playVoice("New life gained");
         break;
       case PowerUpType.SLOW_BALL:
-        ballsRef.current.forEach(ball => {
-          ball.dx *= 0.6;
-          ball.dy *= 0.6;
-        });
+        const wasSlowAlready = activePowerUps.has(PowerUpType.SLOW_BALL);
+        if (!wasSlowAlready) {
+          ballsRef.current.forEach(ball => {
+            ball.dx *= 0.5;
+            ball.dy *= 0.5;
+          });
+        }
         setActivePowerUps(prev => {
           const next = new Map(prev);
-          next.set(PowerUpType.SLOW_BALL, 10000); // 10 seconds for slow ball
+          next.set(PowerUpType.SLOW_BALL, 10000); // Strict 10 seconds
           return next;
         });
         break;
@@ -1668,11 +1675,44 @@ export const Game: React.FC = () => {
               return; 
             }
 
+            // New Brick Types Logic
+            if (brick.type === 'GHOST') {
+              brick.hits = 0; // Destroy immediately
+              brick.active = false;
+              setScore(s => s + 15);
+              spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, 'rgba(255,255,255,0.5)');
+              audioService.playSfx('wall');
+              continue; // Pass through: no bounce
+            }
+
+            if (brick.type === 'FIRE') {
+              applyPowerUp(PowerUpType.FIREBALL);
+              audioService.playVoice("Fire energy!");
+            }
+
+            if (brick.type === 'ICE') {
+              applyPowerUp(PowerUpType.SLOW_BALL);
+              audioService.playVoice("Freezing impact!");
+            }
+
+            if (brick.type === 'PORTAL') {
+              audioService.playSfx('portal');
+              const otherPortals = bricksRef.current.filter(b => b.active && b.type === 'PORTAL' && b !== brick);
+              if (otherPortals.length > 0) {
+                const target = otherPortals[Math.floor(Math.random() * otherPortals.length)];
+                ball.x = target.x + target.width / 2;
+                ball.y = target.y + target.height / 2;
+                // Move ball outside target to avoid immediate re-teleport
+                ball.y += ball.dy > 0 ? target.height : -target.height;
+                spawnParticles(brick.x + brick.width/2, brick.y + brick.height/2, '#aa00ff');
+                spawnParticles(target.x + target.width/2, target.y + target.height/2, '#aa00ff');
+              }
+            }
+
             // Slime brick: ball sticks and slides
             if (brick.type === 'SLIME') {
-              ball.dx *= 0.4;
-              ball.dy *= 0.4;
-              audioService.playSfx('hit');
+              applyPowerUp(PowerUpType.SLOW_BALL);
+              audioService.playVoice("Slime impact!");
               spawnParticles(ball.x, ball.y, '#33ff33');
             }
 
@@ -2049,8 +2089,8 @@ export const Game: React.FC = () => {
               if (type === PowerUpType.GHOST_PADDLE) setGhostPaddleActive(false);
               if (type === PowerUpType.SLOW_BALL) {
                 ballsRef.current.forEach(b => {
-                  b.dx /= 0.6;
-                  b.dy /= 0.6;
+                  b.dx /= 0.5;
+                  b.dy /= 0.5;
                 });
               }
               if (type === PowerUpType.FAST_BALL) {
@@ -2357,6 +2397,43 @@ export const Game: React.FC = () => {
           const drip = Math.sin(Date.now() / 300) * 5;
           ctx.fillRect(brick.x + 5, brick.y + 10, 10, 5 + drip);
           ctx.fillRect(brick.x + brick.width - 15, brick.y + 10, 10, 5 + Math.cos(Date.now() / 400) * 5);
+        } else if (brick.type === 'PORTAL') {
+          // Swirling vortex for portal
+          ctx.save();
+          ctx.translate(brick.x + brick.width / 2, brick.y + brick.height / 2);
+          ctx.rotate(Date.now() / 200);
+          ctx.strokeStyle = '#ff00ff';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(0, 0, 10, 0, Math.PI * 1.5);
+          ctx.stroke();
+          ctx.restore();
+        } else if (brick.type === 'FIRE') {
+          // Flickering flames
+          const flicker = Math.random() * 5;
+          ctx.fillStyle = '#ff3300';
+          ctx.beginPath();
+          ctx.moveTo(brick.x + 5, brick.y + brick.height - 2);
+          ctx.lineTo(brick.x + brick.width / 2, brick.y + 2 + flicker);
+          ctx.lineTo(brick.x + brick.width - 5, brick.y + brick.height - 2);
+          ctx.fill();
+        } else if (brick.type === 'ICE') {
+          // Crystal look
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(brick.x, brick.y);
+          ctx.lineTo(brick.x + brick.width, brick.y + brick.height);
+          ctx.moveTo(brick.x + brick.width, brick.y);
+          ctx.lineTo(brick.x, brick.y + brick.height);
+          ctx.stroke();
+        } else if (brick.type === 'GHOST') {
+          // Ghostly pulse
+          ctx.globalAlpha = 0.3 + Math.sin(Date.now() / 200) * 0.2;
+          ctx.strokeStyle = '#ffffff';
+          ctx.lineWidth = 1;
+          ctx.strokeRect(brick.x + 2, brick.y + 2, brick.width - 4, brick.height - 4);
+          ctx.globalAlpha = 1.0;
         }
       }
 
@@ -3373,7 +3450,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v1.7.0428.1105
+                      RELEASE v1.8.0428.1223
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
