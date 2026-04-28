@@ -1218,11 +1218,13 @@ export const Game: React.FC = () => {
     const rand = Math.random();
     if (rand < 0.05) {
       type = PowerUpType.EXTRA_LIFE; // 5% of powerups
-    } else if (rand < 0.20) {
-      type = PowerUpType.DEATH; // 15% of powerups (dangerous!)
+    } else if (rand < 0.12) {
+      type = PowerUpType.SLOW_BALL; // Reduced frequency for slowdown
+    } else if (rand < 0.25) {
+      type = PowerUpType.DEATH; // 13% of powerups (dangerous!)
     } else {
       // Pick from the rest
-      const otherTypes = types.filter(t => t !== PowerUpType.EXTRA_LIFE && t !== PowerUpType.DEATH);
+      const otherTypes = types.filter(t => t !== PowerUpType.EXTRA_LIFE && t !== PowerUpType.DEATH && t !== PowerUpType.SLOW_BALL);
       type = otherTypes[Math.floor(Math.random() * otherTypes.length)];
     }
     
@@ -1244,6 +1246,11 @@ export const Game: React.FC = () => {
       setLives(l => l - 1);
       setActivePowerUps(new Map());
       setGhostPaddleActive(false);
+      setIsFireballActive(false);
+      setIsBlackHoleActive(false);
+      setHasFloor(false);
+      setHasExplosion(false);
+      setTimeShiftActive(false);
       paddleRef.current.damageTimer = 1000;
       paddleRef.current.hasLaser = false;
       paddleRef.current.width = PADDLE_WIDTH;
@@ -1291,7 +1298,7 @@ export const Game: React.FC = () => {
         });
         setActivePowerUps(prev => {
           const next = new Map(prev);
-          next.set(PowerUpType.SLOW_BALL, POWERUP_DURATION);
+          next.set(PowerUpType.SLOW_BALL, 10000); // 10 seconds for slow ball
           return next;
         });
         break;
@@ -1367,7 +1374,11 @@ export const Game: React.FC = () => {
         ballsRef.current.forEach(ball => {
           ball.isBlackHole = true;
         });
-        // No duration, lasts until level ends
+        setActivePowerUps(prev => {
+          const next = new Map(prev);
+          next.set(PowerUpType.BLACK_HOLE, POWERUP_DURATION);
+          return next;
+        });
         break;
       case PowerUpType.GHOST_PADDLE:
         if (level === 3) break; // No ghost paddle in level 3
@@ -1851,33 +1862,34 @@ export const Game: React.FC = () => {
         if (dist < sensorRange) {
           const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
           
-          if (obj.type === 'GEAR') {
-            if (dist < obj.radius + BALL_RADIUS) {
-              // Proper bounce for gears (solid objects)
-              const nx = dx / dist; // normal x
-              const ny = dy / dist; // normal y
-              
-              // Reflect velocity vector: v' = v - 2(v.n)n
+          // Unified solid collision for all circular physical objects
+          if (obj.type === 'GEAR' || obj.type === 'FAN' || obj.type === 'MAGNET') {
+            const solidRadius = obj.radius + BALL_RADIUS;
+            if (dist < solidRadius && dist > 0.1) {
+              const nx = dx / dist;
+              const ny = dy / dist;
               const dot = ball.dx * nx + ball.dy * ny;
               
-              if (dot < 0) { // Only bounce if moving towards the gear
+              if (dot < 0) {
                 ball.dx = ball.dx - 2 * dot * nx;
                 ball.dy = ball.dy - 2 * dot * ny;
                 
-                // Add a little tangential "kick" based on rotation or just a bit of randomness to feel mechanical
+                // Rotation/Friction kick
                 const kick = 0.5;
                 ball.dx += -ny * kick;
                 ball.dy += nx * kick;
 
-                // Push ball out of collision to prevent sticking
-                const overlap = (obj.radius + BALL_RADIUS) - dist;
-                ball.x += nx * overlap;
-                ball.y += ny * overlap;
+                // Anti-stick push
+                const overlap = solidRadius - dist;
+                ball.x += nx * (overlap + 1);
+                ball.y += ny * (overlap + 1);
 
                 audioService.playSfx('wall');
               }
             }
-          } else if (obj.type === 'FAN') {
+          }
+
+          if (obj.type === 'FAN') {
             const pushForce = 0.3 * (1 - dist / sensorRange);
             const angle = Math.atan2(dy, dx);
             ball.dx += Math.cos(angle) * pushForce;
@@ -1890,6 +1902,40 @@ export const Game: React.FC = () => {
           }
         }
       });
+    });
+
+    // Physical Objects Update & Movement
+    physicalObjectsRef.current.forEach((obj, idx) => {
+      if (obj.type !== 'WARP_GATE') {
+        const timeOffset = idx * 1000;
+        const driftX = Math.sin((now + timeOffset) / 2000) * (idx % 2 === 0 ? 100 : -100);
+        const driftY = Math.cos((now + timeOffset) / 1500) * (idx % 3 === 0 ? 50 : -50);
+        
+        // Asymmetric movement: 
+        // Original positions were set in initBricks. We use them as anchors.
+        // We'll calculate current position based on anchor + drift
+        // But since we are modifying stateful objects, we need to be careful.
+        // Actually, the 'obj' is in physicalObjectsRef.current, which is updated frame-by-frame.
+        // We should probably store initial positions somewhere if we wanted true anchors, 
+        // but simple oscillation around their current position is also fine or we just add the velocity.
+        
+        const vx = Math.cos((now + timeOffset) / 1000) * (idx % 2 === 0 ? 1 : -1);
+        const vy = Math.sin((now + timeOffset) / 1200) * (idx % 3 === 0 ? 1.2 : -0.8);
+        
+        obj.x += vx * speedMultiplier;
+        obj.y += vy * speedMultiplier;
+        
+        // Rotation for gears/fans
+        if (obj.rotation !== undefined) {
+          obj.rotation += 0.05 * speedMultiplier;
+        }
+
+        // Keep within bounds
+        if (obj.x < 50) obj.x = 50;
+        if (obj.x > GAME_WIDTH - 50) obj.x = GAME_WIDTH - 50;
+        if (obj.y < 100) obj.y = 100;
+        if (obj.y > 600) obj.y = 600;
+      }
     });
 
     // Stars
@@ -1930,6 +1976,18 @@ export const Game: React.FC = () => {
                 setIsBlackHoleActive(false);
               }
               if (type === PowerUpType.GHOST_PADDLE) setGhostPaddleActive(false);
+              if (type === PowerUpType.SLOW_BALL) {
+                ballsRef.current.forEach(b => {
+                  b.dx /= 0.6;
+                  b.dy /= 0.6;
+                });
+              }
+              if (type === PowerUpType.FAST_BALL) {
+                ballsRef.current.forEach(b => {
+                  b.dx /= 1.4;
+                  b.dy /= 1.4;
+                });
+              }
               next.delete(type);
             } else {
               next.set(type, newTime);
@@ -3244,7 +3302,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v1.5.0428.0756
+                      RELEASE v1.5.0428.0819
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
