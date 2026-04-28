@@ -1,21 +1,35 @@
 class AudioService {
   private audioContext: AudioContext | null = null;
-  private backgroundMusic: HTMLAudioElement | null = null;
+  private playlist: HTMLAudioElement[] = [];
+  private currentPlaylistIndex: number = 0;
   private atariMusic: HTMLAudioElement | null = null;
   private infinityMusic: HTMLAudioElement | null = null;
   private victoryMusic: HTMLAudioElement | null = null;
   private gameOverSound: HTMLAudioElement | null = null;
   private currentMusic: HTMLAudioElement | null = null;
   private isMuted: boolean = false;
+  private isPlaylistMode: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
       const GITHUB_BASE = 'https://raw.githubusercontent.com/gmxstudio74-code/filesformegaball/main/';
       
-      this.backgroundMusic = new Audio(GITHUB_BASE + encodeURIComponent('copper_bars.mp3'));
-      this.backgroundMusic.loop = true;
-      this.backgroundMusic.volume = 0.6;
+      const playlistFiles = [
+        'copper_bars.mp3',
+        'Music2.mp3',
+        'Music3.mp3',
+        'Music4.mp3',
+        'Music5.mp3',
+        'Music6.mp3'
+      ];
+
+      playlistFiles.forEach((file, index) => {
+        const audio = new Audio(GITHUB_BASE + encodeURIComponent(file));
+        audio.volume = 0.6;
+        audio.addEventListener('ended', () => this.handleTrackEnded());
+        this.playlist.push(audio);
+      });
 
       this.atariMusic = new Audio(GITHUB_BASE + encodeURIComponent('Coppe_ Bar_ at_Dawn_Chip.mp3'));
       this.atariMusic.loop = true;
@@ -34,6 +48,20 @@ class AudioService {
     }
   }
 
+  private async handleTrackEnded() {
+    if (this.isPlaylistMode && !this.isMuted) {
+      this.currentPlaylistIndex = (this.currentPlaylistIndex + 1) % this.playlist.length;
+      const nextTrack = this.playlist[this.currentPlaylistIndex];
+      this.currentMusic = nextTrack;
+      try {
+        nextTrack.currentTime = 0;
+        await nextTrack.play();
+      } catch (e) {
+        console.error("Next track playback failed:", e);
+      }
+    }
+  }
+
   setMuted(muted: boolean) {
     this.isMuted = muted;
     if (muted) {
@@ -49,10 +77,17 @@ class AudioService {
 
   async playMusic(level?: number, isInfinity?: boolean) {
     if (this.isMuted) return;
-    let targetMusic = level === 3 ? this.atariMusic : this.backgroundMusic;
     
-    if (isInfinity) {
+    let targetMusic: HTMLAudioElement | null = null;
+    this.isPlaylistMode = false;
+
+    if (level === 3) {
+      targetMusic = this.atariMusic;
+    } else if (isInfinity) {
       targetMusic = this.infinityMusic;
+    } else {
+      this.isPlaylistMode = true;
+      targetMusic = this.playlist[this.currentPlaylistIndex];
     }
     
     if (this.currentMusic && this.currentMusic !== targetMusic) {
@@ -153,7 +188,8 @@ class AudioService {
   }
 
   stopMusic() {
-    if (this.backgroundMusic) this.backgroundMusic.pause();
+    this.isPlaylistMode = false;
+    if (this.playlist) this.playlist.forEach(a => a.pause());
     if (this.atariMusic) this.atariMusic.pause();
     if (this.infinityMusic) this.infinityMusic.pause();
     if (this.victoryMusic) this.victoryMusic.pause();

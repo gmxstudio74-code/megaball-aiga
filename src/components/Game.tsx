@@ -26,8 +26,8 @@ import {
   Particle,
   Star,
   Ball,
-  Portal,
-  PhysicalObject
+  PhysicalObject,
+  PhysicalObjectType
 } from '../constants';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { audioService } from '../services/audioService';
@@ -70,6 +70,8 @@ interface HighScoreEntry {
   timestamp: Timestamp;
 }
 
+export type BrickType = 'NORMAL' | 'SLIME' | 'TNT' | 'INVISIBLE' | 'SWITCH' | 'HARD';
+
 interface Brick {
   x: number;
   y: number;
@@ -78,9 +80,10 @@ interface Brick {
   color: string;
   active: boolean;
   hits: number;
+  type: BrickType;
   indestructible?: boolean;
   resonates?: boolean;
-  isPortal?: boolean;
+  revealed?: boolean; // For invisible bricks
 }
 
 const RetroScroller = React.memo(({ text }: { text: string }) => {
@@ -194,7 +197,6 @@ export const Game: React.FC = () => {
   const [ghostPaddleActive, setGhostPaddleActive] = useState(false);
   const [hasPaddleMovedSinceLevelStart, setHasPaddleMovedSinceLevelStart] = useState(false);
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
-  const [portals, setPortals] = useState<Portal[]>([]);
   const [physicalObjects, setPhysicalObjects] = useState<PhysicalObject[]>([]);
   const [lastPaddleX, setLastPaddleX] = useState(0);
   const [paddleVelocity, setPaddleVelocity] = useState(0);
@@ -524,7 +526,7 @@ export const Game: React.FC = () => {
           width: brickWidth,
           height: brickHeight,
           color: colors[c % colors.length],
-          hits: 1, active: true, resonates: true
+          hits: 1, active: true, resonates: true, type: 'NORMAL'
         });
       }
       
@@ -537,7 +539,7 @@ export const Game: React.FC = () => {
           width: brickWidth,
           height: brickHeight,
           color: colors[r % colors.length],
-          hits: 2, active: true
+          hits: 2, active: true, type: 'NORMAL'
         });
         // Right
         bricks.push({
@@ -546,7 +548,7 @@ export const Game: React.FC = () => {
           width: brickWidth,
           height: brickHeight,
           color: colors[r % colors.length],
-          hits: 2, active: true
+          hits: 2, active: true, type: 'NORMAL'
         });
       }
 
@@ -569,8 +571,7 @@ export const Game: React.FC = () => {
               width: brickWidth,
               height: brickHeight,
               color: '#ffffff', // Keep white for the text contrast
-              hits: 1, active: true,
-              isPortal: (rOffset === 2 && cOffset === 12) // Hidden portal in the 'I'
+              hits: 1, active: true, type: 'NORMAL'
             });
           }
         });
@@ -585,7 +586,7 @@ export const Game: React.FC = () => {
           width: brickWidth,
           height: brickHeight,
           color: '#00ffff',
-          hits: 1, active: true, resonates: true
+          hits: 1, active: true, resonates: true, type: 'NORMAL'
         });
       }
 
@@ -595,112 +596,243 @@ export const Game: React.FC = () => {
         bricks.push({
           x: BRICK_OFFSET_LEFT + i * (brickWidth + BRICK_PADDING),
           y: BRICK_OFFSET_TOP + 180 + 150, // Moved lower
-          width: brickWidth, height: 10, color: '#444444', active: true, hits: 1, indestructible: true
+          width: brickWidth, height: 10, color: '#444444', active: true, hits: 1, indestructible: true, type: 'NORMAL'
         });
       }
       bricksRef.current = bricks;
     } else {
       // Creative Level Designs with STRICT Symmetry
       const seed = currentLevel * 1337.42;
-      const patternType = Math.floor(rng(seed) * 10);
+      const isWarpPuzzle = currentLevel % 8 === 0 && currentLevel > 1;
       
-      // Limit rows to avoid overlap with obstacles
-      const maxBrickRows = 10; 
-
-      for (let r = 0; r < maxBrickRows; r++) {
-        for (let c = 0; c < cols; c++) {
-          let spawn = false;
-          const midR = 5, midC = 9.5;
-          const symC = c < 10 ? c : 19 - c; // Symmetrical column index
-          const diffR = Math.abs(r - midR);
-          const diffC = Math.abs(c - midC);
-          const symDiffC = Math.abs(symC - 4.5); // Distance from center of the half
-
-          switch(patternType) {
-            case 0: spawn = r < 8 && symC >= (7-r); break; // Pyramid
-            case 1: spawn = (diffR + Math.abs(symC - 5)) <= 5; break; // Diamond
-            case 2: spawn = r < 10 && (symC % 3 < 2); break; // Vertical Bars
-            case 3: spawn = r < 10 && (r % 3 < 2); break; // Horizontal Bars
-            case 4: spawn = (r < 9) && (r === 0 || r === 8 || c === 0 || c === cols - 1); break; // Box
-            case 5: spawn = (r < 9) && (r === 4 || c === 9 || c === 10); break; // Cross
-            case 6: spawn = (r < 9) && (Math.abs(r - symC) < 2); break; // V / X shape
-            case 7: spawn = r < 8 && (Math.sin(symC * 0.8) * 3 + 4 > r); break; // Waves
-            case 8: spawn = (r < 8) && (r + symC < 8); break; // Corner clusters
-            default: spawn = r < 8 && rng(seed + r * 37 + symC) < 0.5; // Random Symmetric
+      if (isWarpPuzzle) {
+        // Warp Puzzle Level Variety
+        const variant = (currentLevel / 8) % 3;
+        const cageX = GAME_WIDTH / 2;
+        const cageY = 250;
+        
+        if (variant === 0) {
+          // Circle Cage (Classic)
+          const cageRadius = 180 + rng(seed) * 40;
+          for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+              bricks.push({
+                x: cageX + i * (brickWidth + 15) - brickWidth/2,
+                y: cageY + j * (brickHeight + 15) - brickHeight/2,
+                width: brickWidth, height: brickHeight,
+                color: (i+j) % 2 === 0 ? '#00ffff' : '#ff3300', 
+                active: true, hits: 2, type: (i+j) % 2 === 0 ? 'NORMAL' : 'TNT', revealed: true
+              });
+            }
           }
-
-          if (spawn) {
-            // Symmetrical properties
-            const propSeed = seed + r * 13 + symC;
+          for (let angle = 0; angle < Math.PI * 2; angle += 0.12) {
             bricks.push({
-              x: c * (brickWidth + BRICK_PADDING) + BRICK_OFFSET_LEFT,
-              y: r * (brickHeight + BRICK_PADDING) + BRICK_OFFSET_TOP,
-              width: brickWidth, height: brickHeight,
-              color: COLORS.bricks[r % COLORS.bricks.length],
-              active: true,
-              hits: (currentLevel > 5 && rng(propSeed) < 0.2) ? 2 : 1,
-              indestructible: currentLevel > 10 && rng(propSeed + 100) < 0.05,
-              resonates: rng(propSeed + 200) < 0.05
+              x: cageX + Math.cos(angle) * cageRadius - 15,
+              y: cageY + Math.sin(angle) * cageRadius - 10,
+              width: 30, height: 20, color: '#555555', active: true, hits: 1, type: 'NORMAL', indestructible: true
             });
+          }
+        } else if (variant === 1) {
+          // Square Fort
+          const size = 200;
+          for (let i = -1; i <= 1; i++) {
+            bricks.push({
+              x: cageX + i * (brickWidth + 10) - brickWidth/2,
+              y: cageY - brickHeight/2,
+              width: brickWidth, height: brickHeight,
+              color: '#33ff33', active: true, hits: 1, type: 'SLIME', revealed: true
+            });
+          }
+          // Walls
+          for (let x = cageX - size; x <= cageX + size; x += 35) {
+            bricks.push({ x, y: cageY - size, width: 30, height: 20, color: '#444444', active: true, hits: 1, type: 'NORMAL', indestructible: true });
+            bricks.push({ x, y: cageY + size, width: 30, height: 20, color: '#444444', active: true, hits: 1, type: 'NORMAL', indestructible: true });
+          }
+          for (let y = cageY - size; y <= cageY + size; y += 25) {
+            bricks.push({ x: cageX - size, y, width: 30, height: 20, color: '#444444', active: true, hits: 1, type: 'NORMAL', indestructible: true });
+            bricks.push({ x: cageX + size, y, width: 30, height: 20, color: '#444444', active: true, hits: 1, type: 'NORMAL', indestructible: true });
+          }
+        } else {
+          // Triangle / Delta
+          for (let r = 0; r < 4; r++) {
+            for (let c = 0; c <= r; c++) {
+              bricks.push({
+                x: cageX + (c - r/2) * (brickWidth + 10) - brickWidth/2,
+                y: cageY + r * (brickHeight + 10) - 50,
+                width: brickWidth, height: brickHeight,
+                color: '#ff00ff', active: true, hits: 1, type: 'INVISIBLE', revealed: false
+              });
+            }
+          }
+          // Perimeter
+          for (let i = 0; i < 15; i++) {
+            const angle = (i / 15) * Math.PI * 2;
+            bricks.push({
+              x: cageX + Math.cos(angle) * 160,
+              y: cageY + Math.sin(angle) * 160,
+              width: 25, height: 25, color: '#333333', active: true, hits: 1, type: 'NORMAL', indestructible: true
+            });
+          }
+        }
+      } else {
+        const patternType = Math.floor(rng(seed) * 10);
+        const maxBrickRows = 10; 
+
+        for (let r = 0; r < maxBrickRows; r++) {
+          for (let c = 0; c < cols; c++) {
+            let spawn = false;
+            const midR = 5, midC = 9.5;
+            const symC = c < 10 ? c : 19 - c; // Symmetrical column index
+            const diffR = Math.abs(r - midR);
+            const diffC = Math.abs(c - midC);
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            const symDiffC = Math.abs(symC - 4.5); 
+
+            switch(patternType) {
+              case 0: spawn = r < 8 && symC >= (7-r); break; // Pyramid
+              case 1: spawn = (diffR + Math.abs(symC - 5)) <= 5; break; // Diamond
+              case 2: spawn = r < 10 && (symC % 3 < 2); break; // Vertical Bars
+              case 3: spawn = r < 10 && (r % 3 < 2); break; // Horizontal Bars
+              case 4: spawn = (r < 9) && (r === 0 || r === 8 || c === 0 || c === cols - 1); break; // Box
+              case 5: spawn = (r < 9) && (r === 4 || c === 9 || c === 10); break; // Cross
+              case 6: spawn = (r < 9) && (Math.abs(r - symC) < 2); break; // V / X shape
+              case 7: spawn = r < 8 && (Math.sin(symC * 0.8) * 3 + 4 > r); break; // Waves
+              case 8: spawn = (r < 8) && (r + symC < 8); break; // Corner clusters
+              default: spawn = r < 8 && rng(seed + r * 37 + symC) < 0.5; // Random Symmetric
+            }
+
+            if (spawn) {
+              const propSeed = seed + r * 13 + symC;
+              const rand = rng(propSeed);
+              let type: BrickType = 'NORMAL';
+              let color = COLORS.bricks[r % COLORS.bricks.length];
+              let hits = (currentLevel > 5 && rng(propSeed) < 0.2) ? 2 : 1;
+              let revealed = true;
+
+              if (currentLevel > 3) {
+                if (rand < 0.05) { type = 'TNT'; color = '#ff3300'; }
+                else if (rand < 0.10) { type = 'SLIME'; color = '#33ff33'; }
+                else if (rand < 0.15) { type = 'INVISIBLE'; revealed = false; color = '#444444'; }
+                else if (rand < 0.20 && currentLevel > 10) { type = 'HARD'; color = '#888888'; hits = 3; }
+              }
+
+              bricks.push({
+                x: c * (brickWidth + BRICK_PADDING) + BRICK_OFFSET_LEFT,
+                y: r * (brickHeight + BRICK_PADDING) + BRICK_OFFSET_TOP,
+                width: brickWidth, height: brickHeight,
+                color, active: true, hits, type, revealed,
+                indestructible: currentLevel > 15 && rng(propSeed + 100) < 0.05,
+                resonates: rng(propSeed + 200) < 0.05
+              });
+            }
           }
         }
       }
       bricksRef.current = bricks;
     }
 
-    // Initialize Physical Objects (Obstacles) - STRICT Symmetry and No Overlap
+    // Initialize Physical Objects (Obstacles)
     if (currentLevel !== 3) {
       const objects: PhysicalObject[] = [];
       const seedBase = currentLevel * 888;
+      const isWarpPuzzle = currentLevel % 8 === 0 && currentLevel > 1;
       
-      const availableTypes: ('FAN' | 'GEAR' | 'MAGNET')[] = [];
-      if (rng(seedBase + 10) > 0.5) availableTypes.push('FAN');
-      if (rng(seedBase + 20) > 0.5) availableTypes.push('GEAR');
-      if (rng(seedBase + 30) > 0.5) availableTypes.push('MAGNET');
+      // Standard Obstacles
+      const availableTypes: PhysicalObjectType[] = [];
+      if (rng(seedBase + 10) > 0.4) availableTypes.push('FAN');
+      if (rng(seedBase + 20) > 0.4) availableTypes.push('GEAR');
+      if (rng(seedBase + 30) > 0.4) availableTypes.push('MAGNET');
+      if (currentLevel > 5) {
+        availableTypes.push('CRUSHER');
+        availableTypes.push('CONVEYOR');
+      }
       
-      const skipAll = currentLevel < 4 || (rng(seedBase + 44) < 0.2);
+      const skipAll = currentLevel < 4 || (rng(seedBase + 44) < 0.15);
 
-      if (availableTypes.length > 0 && !skipAll) {
-        // Obstacle zone is strictly below bricks (y > 350) and above paddle area
-        const obstacleRows = Math.floor(rng(seedBase + 55) * 2) + 1; // 1 or 2 rows of obstacles
-        
+      if (availableTypes.length > 0 && !skipAll && !isWarpPuzzle) {
+        const obstacleRows = Math.floor(rng(seedBase + 55) * 2) + 1;
         for (let row = 0; row < obstacleRows; row++) {
           const type = availableTypes[Math.floor(rng(seedBase + row * 9) * availableTypes.length)];
-          const radius = type === 'FAN' ? 70 : (type === 'GEAR' ? 40 : 50);
-          const y = 400 + row * 150; // Guaranteed gap from bricks
-          
+          const y = 400 + row * 150;
           const layoutType = rng(seedBase + row * 77);
 
-          if (layoutType < 0.3) {
-            // Single center object
-            objects.push({
-              id: `obj-${currentLevel}-${row}-center`,
-              type, x: GAME_WIDTH / 2, y, radius,
+          const createObject = (side: 'L' | 'R' | 'C', x: number): PhysicalObject | null => {
+            const id = `obj-${currentLevel}-${row}-${side}`;
+            const baseObj: PhysicalObject = {
+              id, type, x, y, radius: 40,
               rotation: rng(seedBase + row) * Math.PI,
-              strength: type === 'FAN' ? 0.2 : (type === 'MAGNET' ? 0.25 : 0)
+              strength: 0
+            };
+            switch(type) {
+              case 'FAN': baseObj.radius = 70; baseObj.strength = 0.22; break;
+              case 'GEAR': baseObj.radius = 45; break;
+              case 'MAGNET': baseObj.radius = 55; baseObj.strength = 0.28; break;
+              case 'CRUSHER': baseObj.radius = 35; baseObj.width = 80; baseObj.height = 30; baseObj.state = 'RETRACTED'; baseObj.lastMoveTime = 0; break;
+              case 'CONVEYOR': baseObj.radius = 40; baseObj.width = 120; baseObj.height = 20; baseObj.direction = rng(seedBase + row) > 0.5 ? 'LEFT' : 'RIGHT'; break;
+            }
+
+            // Guard against brick overlap
+            const padding = 60;
+            const hasOverlap = bricks.some(b => {
+              const bCenterX = b.x + b.width / 2;
+              const bCenterY = b.y + b.height / 2;
+              const dist = Math.sqrt((x - bCenterX) ** 2 + (y - bCenterY) ** 2);
+              return dist < baseObj.radius + padding;
             });
+
+            if (hasOverlap) return null;
+            return baseObj;
+          };
+
+          if (layoutType < 0.25 && type !== 'CRUSHER') {
+            const obj = createObject('C', GAME_WIDTH / 2);
+            if (obj) objects.push(obj);
           } else {
-            // Symmetrical pair
-            const distFromCenter = 150 + rng(seedBase + row * 11) * 200;
-            const rotation = rng(seedBase + row) * Math.PI;
-            
-            // Left
-            objects.push({
-              id: `obj-${currentLevel}-${row}-L`,
-              type, x: GAME_WIDTH / 2 - distFromCenter, y, radius,
-              rotation: rotation,
-              strength: type === 'FAN' ? 0.2 : (type === 'MAGNET' ? 0.25 : 0)
-            });
-            // Right (Mirrored)
-            objects.push({
-              id: `obj-${currentLevel}-${row}-R`,
-              type, x: GAME_WIDTH / 2 + distFromCenter, y, radius,
-              rotation: -rotation,
-              strength: type === 'FAN' ? 0.2 : (type === 'MAGNET' ? 0.25 : 0)
-            });
+            const distFromCenter = 180 + rng(seedBase + row * 11) * 220;
+            const objL = createObject('L', GAME_WIDTH / 2 - distFromCenter);
+            const objR = createObject('R', GAME_WIDTH / 2 + distFromCenter);
+            if (objL) objects.push(objL);
+            if (objR) objects.push(objR);
           }
         }
       }
+
+      // Handle Warp Gates (Strategic Portals)
+      if (isWarpPuzzle) {
+        const gate1Id = `gate-${currentLevel}-1`;
+        const gate2Id = `gate-${currentLevel}-2`;
+        const gate3Id = `gate-${currentLevel}-3`;
+        
+        const variant = (currentLevel / 8) % 3;
+        
+        if (variant === 0) {
+          // Narrow side corridors for portals
+          objects.push({ id: gate1Id, type: 'WARP_GATE', x: 100, y: 550, radius: 35, targetId: gate2Id });
+          objects.push({ id: gate3Id, type: 'WARP_GATE', x: GAME_WIDTH - 100, y: 550, radius: 35, targetId: gate2Id });
+          
+          // Obstacles blocking direct path
+          objects.push({ id: `block-${currentLevel}-1`, type: 'GEAR', x: 250, y: 550, radius: 50 });
+          objects.push({ id: `block-${currentLevel}-2`, type: 'GEAR', x: GAME_WIDTH - 250, y: 550, radius: 50 });
+        } else if (variant === 1) {
+          // Hidden behind a crusher
+          objects.push({ id: gate1Id, type: 'WARP_GATE', x: GAME_WIDTH/2, y: 500, radius: 35, targetId: gate2Id });
+          objects.push({ 
+            id: `guard-${currentLevel}`, type: 'CRUSHER', x: GAME_WIDTH/2, y: 450, radius: 35, 
+            width: 150, height: 40, state: 'RETRACTED' 
+          });
+        } else {
+          // Far corners with wind resistance
+          objects.push({ id: gate1Id, type: 'WARP_GATE', x: 80, y: 400, radius: 35, targetId: gate2Id });
+          objects.push({ id: gate3Id, type: 'WARP_GATE', x: GAME_WIDTH - 80, y: 400, radius: 35, targetId: gate2Id });
+          objects.push({ id: `fan-${currentLevel}`, type: 'FAN', x: GAME_WIDTH/2, y: 550, radius: 80, strength: 0.3 });
+        }
+        
+        // Exit (Inside cage)
+        objects.push({
+          id: gate2Id, type: 'WARP_GATE', x: GAME_WIDTH / 2, y: 250, radius: 35, targetId: gate1Id 
+        });
+      }
+
       setPhysicalObjects(objects);
       physicalObjectsRef.current = objects;
     } else {
@@ -717,7 +849,6 @@ export const Game: React.FC = () => {
       setGhostPaddleActive(false);
       setHasFloor(false);
       setHasExplosion(false);
-      setPortals([]);
     }
     const speed = INITIAL_BALL_SPEED + (level * 0.05);
     const currentPaddleWidth = Math.max(70, PADDLE_WIDTH - (level * 0.3));
@@ -1200,17 +1331,6 @@ export const Game: React.FC = () => {
         });
         audioService.playSfx('powerup');
         break;
-      case PowerUpType.PORTAL:
-        // Spawn portals immediately
-        const p1Id = Math.random().toString(36).substr(2, 9);
-        const p2Id = Math.random().toString(36).substr(2, 9);
-        const p1: Portal = { x: Math.random() * (GAME_WIDTH - 100) + 50, y: 100, id: p1Id, targetId: p2Id, active: true, color: '#00ffff' };
-        const p2: Portal = { x: Math.random() * (GAME_WIDTH - 100) + 50, y: 400, id: p2Id, targetId: p1Id, active: true, color: '#ff00ff' };
-        setPortals(prev => [...prev, p1, p2]);
-        setTimeout(() => {
-          setPortals(prev => prev.filter(p => p.id !== p1Id && p.id !== p2Id));
-        }, POWERUP_DURATION);
-        break;
     }
   };
 
@@ -1364,21 +1484,25 @@ export const Game: React.FC = () => {
         audioService.playSfx('paddle');
       }
 
-      // Portal collision
-      portals.forEach(portal => {
-        if (portal.active) {
-          const dx = ball.x - (portal.x + 40);
-          const dy = ball.y - (portal.y + 10);
+      // Warp Gate (Teleport) collision
+      physicalObjectsRef.current.forEach(obj => {
+        if (obj.type === 'WARP_GATE') {
+          const dx = ball.x - obj.x;
+          const dy = ball.y - obj.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < 30) {
-            const target = portals.find(p => p.id === portal.targetId);
-            if (target) {
-              ball.x = target.x + 40;
-              ball.y = target.y + 10;
+          if (dist < obj.radius + BALL_RADIUS) {
+            const target = physicalObjectsRef.current.find(o => o.id === obj.targetId);
+            const now = Date.now();
+            const lastInteraction = ball.lastInteractionFrame || 0;
+            
+            // Cool-down to prevent infinite ping-pong
+            if (target && now - lastInteraction > 500) {
+              ball.x = target.x;
+              ball.y = target.y;
+              ball.lastInteractionFrame = now;
               audioService.playSfx('powerup');
-              // Briefly deactivate to prevent infinite loops
-              portal.active = false;
-              setTimeout(() => portal.active = true, 500);
+              spawnParticles(obj.x, obj.y, '#00ffff');
+              spawnParticles(target.x, target.y, '#00ffff');
             }
           }
         }
@@ -1449,9 +1573,41 @@ export const Game: React.FC = () => {
           // Normal balls only hit one brick per frame to prevent rebound glitches
           if (!ball.isFireball && !ball.isPiercing && collidedThisFrame) continue;
           
+          // Identify collision side by finding the shallowest penetration
+          const overlapLeft = (ball.x + BALL_RADIUS) - brick.x;
+          const overlapRight = (brick.x + brick.width) - (ball.x - BALL_RADIUS);
+          const overlapTop = (ball.y + BALL_RADIUS) - brick.y;
+          const overlapBottom = (brick.y + brick.height) - (ball.y - BALL_RADIUS);
+          
+          const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
+          
           collidedThisFrame = true;
           
           if (!brick.indestructible) {
+            // Invisible bricks reveal on first hit
+            if (brick.type === 'INVISIBLE' && !brick.revealed) {
+              brick.revealed = true;
+              audioService.playSfx('wall');
+              
+              // Still need to bounce
+              if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+                ball.dx *= -1;
+                ball.x = minOverlap === overlapLeft ? brick.x - BALL_RADIUS : brick.x + brick.width + BALL_RADIUS;
+              } else {
+                ball.dy *= -1;
+                ball.y = minOverlap === overlapTop ? brick.y - BALL_RADIUS : brick.y + brick.height + BALL_RADIUS;
+              }
+              return; 
+            }
+
+            // Slime brick: ball sticks and slides
+            if (brick.type === 'SLIME') {
+              ball.dx *= 0.4;
+              ball.dy *= 0.4;
+              audioService.playSfx('hit');
+              spawnParticles(ball.x, ball.y, '#33ff33');
+            }
+
             brick.hits--;
             if (brick.hits <= 0) {
               brick.active = false;
@@ -1459,6 +1615,26 @@ export const Game: React.FC = () => {
               spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
               spawnPowerUp(brick.x + brick.width / 2, brick.y + brick.height / 2);
               audioService.playBreakSound();
+
+              // TNT Explosion
+              if (brick.type === 'TNT') {
+                const blastRadius = 100;
+                bricksRef.current.forEach(otherBrick => {
+                  if (otherBrick.active && !otherBrick.indestructible) {
+                    const bDx = otherBrick.x + otherBrick.width/2 - (brick.x + brick.width/2);
+                    const bDy = otherBrick.y + otherBrick.height/2 - (brick.y + brick.height/2);
+                    const bDist = Math.sqrt(bDx*bDx + bDy*bDy);
+                    if (bDist < blastRadius) {
+                      otherBrick.active = false;
+                      setScore(s => s + 5);
+                      spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, otherBrick.color);
+                      audioService.playBreakSound();
+                    }
+                  }
+                });
+                audioService.playSfx('explosion');
+                setBrickShake(15);
+              }
               
               // Chain Reaction
               if (brick.resonates) {
@@ -1482,17 +1658,6 @@ export const Game: React.FC = () => {
                 });
               }
 
-              // Portal Brick
-              if (brick.isPortal) {
-                const p1Id = Math.random().toString(36).substr(2, 9);
-                const p2Id = Math.random().toString(36).substr(2, 9);
-                const p1: Portal = { x: brick.x, y: brick.y, id: p1Id, targetId: p2Id, active: true, color: '#00ffff' };
-                const p2: Portal = { x: Math.random() * (GAME_WIDTH - 100) + 50, y: Math.random() * (GAME_HEIGHT - 300) + 100, id: p2Id, targetId: p1Id, active: true, color: '#ff00ff' };
-                setPortals(prev => [...prev, p1, p2]);
-                setTimeout(() => {
-                  setPortals(prev => prev.filter(p => p.id !== p1Id && p.id !== p2Id));
-                }, 10000);
-              }
               if (hasExplosion) {
                 const explosionRadius = 80;
                 bricksRef.current.forEach(otherBrick => {
@@ -1521,7 +1686,32 @@ export const Game: React.FC = () => {
             if (ball.isPiercing && !brick.indestructible) {
               // Pass through only destructible bricks
             } else {
-              ball.dy = -ball.dy;
+              // Proper bounce response: Detect side better
+              const ballPrevX = ball.x - (ball.dx * delta / 16.6); // Approximate prev pos
+              const ballPrevY = ball.y - (ball.dy * delta / 16.6);
+
+              const hitLeft = ballPrevX + BALL_RADIUS <= brick.x;
+              const hitRight = ballPrevX - BALL_RADIUS >= brick.x + brick.width;
+              const hitTop = ballPrevY + BALL_RADIUS <= brick.y;
+              const hitBottom = ballPrevY - BALL_RADIUS >= brick.y + brick.height;
+
+              if (hitLeft || hitRight) {
+                ball.dx *= -1;
+                ball.x = hitLeft ? brick.x - BALL_RADIUS : brick.x + brick.width + BALL_RADIUS;
+              } else if (hitTop || hitBottom) {
+                ball.dy *= -1;
+                ball.y = hitTop ? brick.y - BALL_RADIUS : brick.y + brick.height + BALL_RADIUS;
+              } else {
+                // Fallback to minimal overlap if previous pos was already inside or ambiguous
+                if (minOverlap === overlapLeft || minOverlap === overlapRight) {
+                  ball.dx = Math.abs(ball.dx) * (minOverlap === overlapLeft ? -1 : 1);
+                  ball.x = minOverlap === overlapLeft ? brick.x - BALL_RADIUS : brick.x + brick.width + BALL_RADIUS;
+                } else {
+                  ball.dy = Math.abs(ball.dy) * (minOverlap === overlapTop ? -1 : 1);
+                  ball.y = minOverlap === overlapTop ? brick.y - BALL_RADIUS : brick.y + brick.height + BALL_RADIUS;
+                }
+              }
+              
               if (!brick.indestructible) {
                 ball.consecutiveWallHits = 0; // Reset anti-loop on destructible brick hit
               }
@@ -1559,28 +1749,56 @@ export const Game: React.FC = () => {
       }
     }
 
-    // Portal Teleportation
-    ballsRef.current.forEach(ball => {
-      portals.forEach(portal => {
-        if (portal.active) {
-          const dx = ball.x - (portal.x + 40);
-          const dy = ball.y - (portal.y + 10);
-          const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < 30) {
-            const target = portals.find(p => p.id === portal.targetId);
-            if (target) {
-              ball.x = target.x + 40;
-              ball.y = target.y + 10;
-              audioService.playSfx('portal');
-            }
-          }
-        }
-      });
-    });
-
     // Physical Objects Interaction
+    const now = Date.now();
     ballsRef.current.forEach(ball => {
       physicalObjectsRef.current.forEach(obj => {
+        // Crusher Logic
+        if (obj.type === 'CRUSHER') {
+          const movePeriod = 2000;
+          const timeOffset = obj.lastMoveTime || 0;
+          const phase = ((now + timeOffset) % movePeriod) / movePeriod;
+          
+          if (phase < 0.5) {
+            obj.state = 'EXTENDED';
+            // Animation for visual
+            obj.rotation = (phase * 2) * 40; // Extension height 0-40
+          } else {
+            obj.state = 'RETRACTED';
+            obj.rotation = ((1 - phase) * 2) * 40;
+          }
+
+          // AABB Collision for Crusher
+          const crusherY = obj.y - (obj.rotation || 0);
+          if (
+            ball.x + BALL_RADIUS > obj.x - (obj.width! / 2) &&
+            ball.x - BALL_RADIUS < obj.x + (obj.width! / 2) &&
+            ball.y + BALL_RADIUS > crusherY &&
+            ball.y - BALL_RADIUS < crusherY + obj.height!
+          ) {
+            ball.dy = Math.abs(ball.dy); // Pop ball down
+            audioService.playSfx('wall');
+            setPaddleShake(2);
+          }
+        }
+
+        // Conveyor Logic
+        if (obj.type === 'CONVEYOR') {
+          if (
+            ball.x + BALL_RADIUS > obj.x - (obj.width! / 2) &&
+            ball.x - BALL_RADIUS < obj.x + (obj.width! / 2) &&
+            ball.y + BALL_RADIUS > obj.y &&
+            ball.y - BALL_RADIUS < obj.y + obj.height!
+          ) {
+            const driftSpeed = 1.5;
+            ball.dx += obj.direction === 'LEFT' ? -driftSpeed : driftSpeed;
+            // Friction/Impact
+            ball.dy = -ball.dy;
+            ball.y = obj.y - BALL_RADIUS; 
+            audioService.playSfx('wall');
+          }
+        }
+
         const dx = ball.x - obj.x;
         const dy = ball.y - obj.y;
         const dist = Math.sqrt(dx*dx + dy*dy);
@@ -1769,7 +1987,8 @@ export const Game: React.FC = () => {
           height: 20,
           color: COLORS.bricks[Math.floor(Math.random() * COLORS.bricks.length)],
           active: true,
-          hits: 1
+          hits: 1,
+          type: 'NORMAL'
         });
       }
     }
@@ -1861,6 +2080,17 @@ export const Game: React.FC = () => {
     // Draw Bricks
     bricksRef.current.forEach(brick => {
       if (!brick.active) return;
+
+      // Invisible bricks logic
+      if (brick.type === 'INVISIBLE' && !brick.revealed) {
+        // Very faint outline or nothing
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(brick.x, brick.y, brick.width, brick.height);
+        ctx.restore();
+        return;
+      }
       
       // Resonating effect (draw before brick)
       if (brick.resonates) {
@@ -1938,18 +2168,27 @@ export const Game: React.FC = () => {
           ctx.strokeStyle = 'rgba(255,255,255,0.2)';
           ctx.strokeRect(brick.x + 4, brick.y + 4, brick.width - 8, brick.height - 8);
         }
+
+        // Special types visual overlay
+        if (brick.type === 'TNT') {
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 10px monospace';
+          ctx.fillText('TNT', brick.x + 10, brick.y + 14);
+          // Fuse animation
+          ctx.strokeStyle = '#ffcc00';
+          ctx.beginPath();
+          ctx.moveTo(brick.x + brick.width - 5, brick.y + 5);
+          ctx.lineTo(brick.x + brick.width - 2, brick.y - 2);
+          ctx.stroke();
+        } else if (brick.type === 'SLIME') {
+          ctx.fillStyle = 'rgba(0, 255, 0, 0.3)';
+          const drip = Math.sin(Date.now() / 300) * 5;
+          ctx.fillRect(brick.x + 5, brick.y + 10, 10, 5 + drip);
+          ctx.fillRect(brick.x + brick.width - 15, brick.y + 10, 10, 5 + Math.cos(Date.now() / 400) * 5);
+        }
       }
 
-      // Portal Brick effect
-      if (brick.isPortal) {
-        ctx.save();
-        ctx.strokeStyle = '#00ffff';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([5, 5]);
-        ctx.lineDashOffset = -Date.now() / 50;
-        ctx.strokeRect(brick.x + 2, brick.y + 2, brick.width - 4, brick.height - 4);
-        ctx.restore();
-      }
+      // Final tactical score display logic below...
     });
 
     // Paint Atari Logo and Text over bricks (Level 3 only)
@@ -2275,6 +2514,94 @@ export const Game: React.FC = () => {
           ctx.fillStyle = '#cccccc';
           ctx.fillRect(-size-7.5, 0, 15, 10);
           ctx.fillRect(size-7.5, 0, 15, 10);
+        } else if (obj.type === 'WARP_GATE') {
+          // Retro Warp Gate
+          const animTime = Date.now() / 1000;
+          const outerRadius = obj.radius;
+          const innerRadius = obj.radius * 0.6;
+          
+          // Glow
+          const grad = ctx.createRadialGradient(0, 0, 5, 0, 0, outerRadius);
+          grad.addColorStop(0, '#00ffff');
+          grad.addColorStop(1, 'transparent');
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(0, 0, outerRadius, 0, Math.PI * 2);
+          ctx.fill();
+          
+          // Rings
+          ctx.strokeStyle = '#00ffff';
+          ctx.lineWidth = 2;
+          for (let i = 0; i < 3; i++) {
+            const r = innerRadius + Math.sin(animTime * 2 + i) * 5;
+            ctx.rotate(animTime + i);
+            ctx.beginPath();
+            ctx.arc(0, 0, r, 0, Math.PI * 1.2);
+            ctx.stroke();
+          }
+          
+          // Center core
+          ctx.fillStyle = '#ffffff';
+          ctx.beginPath();
+          ctx.arc(0, 0, 5 + Math.sin(animTime * 5) * 2, 0, Math.PI * 2);
+          ctx.fill();
+        } else if (obj.type === 'CRUSHER') {
+          // Crusher Block
+          const h = obj.height!;
+          const w = obj.width!;
+          const offset = obj.rotation || 0; // Usage as vertical offset here
+
+          // Shadow
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
+          ctx.fillRect(-w/2 + 5, -offset + 5, w, h);
+
+          // Body
+          const grad = ctx.createLinearGradient(-w/2, -offset, -w/2, -offset + h);
+          grad.addColorStop(0, '#555555');
+          grad.addColorStop(0.5, '#aaaaaa');
+          grad.addColorStop(1, '#222222');
+          ctx.fillStyle = grad;
+          ctx.fillRect(-w/2, -offset, w, h);
+          
+          // Spikes
+          ctx.fillStyle = '#888888';
+          for (let i = 0; i < 4; i++) {
+            const sx = -w/2 + (i * (w/4)) + w/8;
+            ctx.beginPath();
+            ctx.moveTo(sx - 5, -offset + h);
+            ctx.lineTo(sx, -offset + h + 10);
+            ctx.lineTo(sx + 5, -offset + h);
+            ctx.fill();
+          }
+        } else if (obj.type === 'CONVEYOR') {
+          // Conveyor Belt
+          const w = obj.width!;
+          const h = obj.height!;
+          
+          ctx.fillStyle = '#333333';
+          ctx.fillRect(-w/2, 0, w, h);
+          
+          // Moving texture
+          ctx.strokeStyle = '#666666';
+          ctx.lineWidth = 2;
+          const anim = (Date.now() / 20) % 20;
+          const dirSign = obj.direction === 'LEFT' ? -1 : 1;
+          
+          ctx.save();
+          ctx.clip();
+          ctx.beginPath();
+          for (let i = -w; i < w; i += 20) {
+            const tx = i + (anim * dirSign);
+            ctx.moveTo(tx, 0);
+            ctx.lineTo(tx + 10 * dirSign, h/2);
+            ctx.lineTo(tx, h);
+          }
+          ctx.stroke();
+          ctx.restore();
+          
+          // Frame
+          ctx.strokeStyle = '#888888';
+          ctx.strokeRect(-w/2, 0, w, h);
         }
         ctx.restore();
       });
@@ -2348,7 +2675,6 @@ export const Game: React.FC = () => {
         [PowerUpType.EXPLOSION]: '💥',
         [PowerUpType.BLACK_HOLE]: '🕳️',
         [PowerUpType.GHOST_PADDLE]: '👻',
-        [PowerUpType.PORTAL]: '🌀',
       };
 
       powerUpsRef.current.forEach(pu => {
@@ -2427,42 +2753,8 @@ export const Game: React.FC = () => {
       ctx.shadowBlur = 0;
     });
 
-    // Draw Portals (Warp Gates)
-    if (level !== 3) {
-      portals.forEach(portal => {
-        if (portal.active) {
-          ctx.save();
-          ctx.translate(portal.x + 40, portal.y + 10);
-          ctx.rotate(Date.now() / 500);
-          
-          // Outer ring
-          ctx.strokeStyle = portal.color;
-          ctx.lineWidth = 3;
-          ctx.setLineDash([10, 5]);
-          ctx.lineDashOffset = -Date.now() / 20;
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 40, 15, 0, 0, Math.PI * 2);
-          ctx.stroke();
-          
-          // Inner glow
-          ctx.fillStyle = portal.color + '22';
-          ctx.beginPath();
-          ctx.ellipse(0, 0, 35, 12, 0, 0, Math.PI * 2);
-          ctx.fill();
-          
-          // Center core
-          ctx.fillStyle = '#ffffff';
-          ctx.beginPath();
-          ctx.arc(0, 0, 3, 0, Math.PI * 2);
-          ctx.fill();
-          
-          ctx.restore();
-        }
-      });
-    }
-
     // Final restore removed since it was moved above
-  }, [brickShake, paddleShake, level, bgImage, level3BgImage, isLevel3Intro, portals, physicalObjects, ghostPaddleActive]);
+  }, [brickShake, paddleShake, level, bgImage, level3BgImage, isLevel3Intro, physicalObjects, ghostPaddleActive]);
 
   useGameLoop((delta) => {
     update(delta);
@@ -2566,8 +2858,8 @@ export const Game: React.FC = () => {
     >
       <div 
         className={`relative flex flex-col bg-black border-4 border-green-500 shadow-[0_0_60px_rgba(0,255,0,0.2)] rounded-lg overflow-hidden
-          ${isFullscreen ? 'w-full h-full' : 'w-[95vw] h-[95vh] max-w-[1400px] max-h-[90vh]'}
-          [container-type:size]`}
+          ${isFullscreen ? 'w-full h-full' : 'w-[95vw] h-[95vh] max-w-[1400px] max-h-[90vh] aspect-[10/7]'}
+          [container-type:size] self-center`}
       >
         {/* HUD with Copper Effect */}
         <div className={`relative w-full p-[1.5cqw] flex justify-between items-center bg-black z-10 border-b-2 border-green-500/50 shrink-0 overflow-hidden ${isCursorHidden ? 'cursor-none' : ''} opacity-100 transition-opacity duration-700`}>
@@ -2589,15 +2881,26 @@ export const Game: React.FC = () => {
                 ))}
               </div>
             </div>
-            <div className="flex flex-col min-w-[15cqw]">
-              <span className="text-[1cqw] uppercase tracking-widest text-green-500/70">Energy</span>
+            <div className="flex flex-col min-w-[20cqw] gap-[0.2cqw]">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[1cqw] uppercase tracking-widest text-[#00ff41] font-bold">Tactical Energy</span>
+                <span className="text-[1.2cqw] text-[#00ff41] font-black font-mono">⚡ {Math.floor(energy)}%</span>
+              </div>
               <div className="h-[2.5cqw] flex items-center gap-[1cqw]">
-                <div className="flex-1 bg-black border border-green-500/30 h-[1.2cqw] rounded-sm overflow-hidden">
-                  <div className={`h-full transition-all duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.5)]' : 'bg-cyan-800'}`} style={{ width: `${energy}%` }} />
+                <div className="flex-1 bg-black border-2 border-[#00ff41]/20 h-[1.5cqw] rounded-sm overflow-hidden relative">
+                  <motion.div 
+                    className={`h-full transition-all duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : 'bg-[#00ff41]/40'}`} 
+                    animate={{ width: `${energy}%` }}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
                 </div>
                 <div className="flex gap-[0.5cqw]">
-                  {energy >= 50 ? <span className="text-[1.2cqw] text-cyan-400 font-black animate-pulse" title="T: Time Shift Active">T</span> : <span className="text-[1.2cqw] text-gray-800 font-black">T</span>}
-                  {energy >= 30 ? <span className="text-[1.2cqw] text-purple-400 font-black" title="E: Force Push Active">E</span> : <span className="text-[1.2cqw] text-gray-800 font-black">E</span>}
+                  <div className={`w-[2.4cqw] h-[2.4cqw] flex items-center justify-center border-2 rounded transition-all ${energy >= 30 ? 'border-purple-500 bg-purple-500/20 text-purple-400 animate-pulse' : 'border-gray-800 text-gray-800'}`} title="[E] Force Push">
+                    <span className="text-[1.4cqw] font-black">E</span>
+                  </div>
+                  <div className={`w-[2.4cqw] h-[2.4cqw] flex items-center justify-center border-2 rounded transition-all ${energy >= 50 ? 'border-cyan-500 bg-cyan-500/20 text-cyan-400 animate-pulse' : 'border-gray-800 text-gray-800'}`} title="[T] Time Slow">
+                    <span className="text-[1.4cqw] font-black">T</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2636,6 +2939,12 @@ export const Game: React.FC = () => {
               <Maximize className="w-[2cqw] h-[2cqw]" />
             </button>
             <div className="flex items-center gap-[2cqw]">
+              <div className="flex flex-col items-center">
+                <span className="text-[0.8cqw] uppercase text-green-500/50 leading-none mb-1">Bricks</span>
+                <div className="text-[1.5cqw] font-bold text-cyan-400 border border-cyan-500/30 px-[1cqw] py-[0.2cqw] rounded bg-cyan-500/5 min-w-[5cqw] text-center">
+                  {bricksRef.current.filter(b => b.active && !b.indestructible).length}
+                </div>
+              </div>
               <div className="text-[1.5cqw] font-bold text-green-500 border border-green-500 px-[1.5cqw] py-[0.5cqw] rounded">
                 LEVEL {level}
               </div>
@@ -2683,119 +2992,129 @@ export const Game: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 overflow-hidden p-4 backdrop-blur-sm"
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 overflow-hidden p-[2cqw] backdrop-blur-sm"
             >
               {/* High Score on Start Screen */}
               <div className="absolute top-[2cqw] right-[2cqw] text-right z-30">
-                <span className="text-[1cqw] text-yellow-500/60 uppercase block tracking-[0.2em]">High Score</span>
-                <span className="text-[3cqw] font-black text-yellow-500 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">{highScore.toLocaleString()}</span>
+                <span className="text-[1.2cqw] text-yellow-500/60 uppercase block tracking-[0.2em]">High Score</span>
+                <span className="text-[3.5cqw] font-black text-yellow-500 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">{highScore.toLocaleString()}</span>
               </div>
 
               {/* Copper Bars Effect - Optimized to CSS */}
-              <div className="absolute inset-0 flex flex-col justify-around pointer-events-none overflow-hidden">
+              <div className="absolute inset-0 flex flex-col justify-around pointer-events-none overflow-hidden opacity-30">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div
                     key={i}
                     className="copper-bar"
                     style={{
                       background: `linear-gradient(to bottom, transparent, ${COLORS.bricks[i % COLORS.bricks.length]}, transparent)`,
-                      animationDuration: `${3 + i * 0.5}s`,
-                      animationDelay: `${i * -0.2}s`
+                      animationDuration: `${4 + i * 0.5}s`,
+                      animationDelay: `${i * -0.3}s`
                     }}
                   />
                 ))}
               </div>
 
-              <motion.div
-                animate={{
-                  scale: [1, 1.05, 1],
-                  rotate: [-1, 1, -1]
-                }}
-                transition={{ duration: 4, repeat: Infinity }}
-                className="relative z-10 text-center mb-[2cqh] mt-[10cqh]"
-              >
-                <h1 className="text-[9cqw] font-black italic tracking-tighter text-white mb-[0.5cqw] drop-shadow-[0_0_30px_rgba(0,255,0,1)] leading-none">
-                  MEGABALL <span className="text-red-500">Ai</span><span className="text-green-500">GA</span>
-                </h1>
-                <p className="text-[2.2cqw] text-green-500/80 mb-[0.5cqw] uppercase tracking-[0.8em]">Commodore Amiga Tribute</p>
-                <p className="text-[1.3cqw] text-green-500/40 mb-[2cqh] uppercase tracking-widest animate-pulse">Click to activate sound & start</p>
-              </motion.div>
-
-              <div className="flex flex-col items-center gap-[1cqh] z-10 mb-[3cqh]">
-                <label htmlFor="level-select" className="text-[1.2cqw] text-green-500/60 uppercase tracking-widest">Select Starting Sector</label>
-                <select 
-                  id="level-select"
-                  value={level}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value);
-                    setLevel(val);
-                    initBricks(val);
+              <div className="flex-1 flex flex-col items-center justify-center gap-[2cqh] w-full max-w-[90cqw] z-10 pt-[5cqh] pb-[15cqh]">
+                <motion.div
+                  animate={{
+                    scale: [1, 1.03, 1],
+                    rotate: [-0.5, 0.5, -0.5]
                   }}
-                  className="bg-black text-green-500 border-2 border-green-500/50 px-[2cqw] py-[0.5cqw] rounded-sm text-[1.5cqw] font-bold focus:outline-none focus:border-green-400 cursor-pointer hover:bg-green-500/10 transition-colors"
+                  transition={{ duration: 5, repeat: Infinity }}
+                  className="text-center"
                 >
-                  {Array.from({ length: 100 }).map((_, i) => (
-                    <option key={i + 1} value={i + 1}>SECTOR {i + 1}</option>
-                  ))}
-                </select>
+                  <h1 className="text-[min(10cqw,12cqh)] font-black italic tracking-tighter text-white mb-[0.2cqw] drop-shadow-[0_0_30px_rgba(0,255,0,1)] leading-none">
+                    MEGABALL <span className="text-red-500">Ai</span><span className="text-green-500">GA</span>
+                  </h1>
+                  <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
+                  <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse">Click to activate sound & start</p>
+                </motion.div>
+
+                <div className="flex flex-col items-center gap-[1cqh]">
+                  <label htmlFor="level-select" className="text-[1.2cqw] text-green-500/60 uppercase tracking-widest">Select Starting Sector</label>
+                  <select 
+                    id="level-select"
+                    value={level}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value);
+                      setLevel(val);
+                      initBricks(val);
+                    }}
+                    className="bg-black text-green-500 border-2 border-green-500/50 px-[2cqw] py-[0.5cqw] rounded-sm text-[1.5cqw] font-bold focus:outline-none focus:border-green-400 cursor-pointer hover:bg-green-500/10 transition-colors"
+                  >
+                    {Array.from({ length: 100 }).map((_, i) => (
+                      <option key={i + 1} value={i + 1}>SECTOR {i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+                
+                <div className="flex flex-wrap justify-center gap-[2cqw]">
+                  <button
+                    onClick={() => startGame(false)}
+                    className="group relative flex items-center gap-[1.5cqw] px-[5cqw] py-[1.5cqw] bg-green-600 hover:bg-green-500 text-black font-black text-[2cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(0,255,0,0.4)]"
+                  >
+                    <Play className="w-[2.5cqw] h-[2.5cqw]" fill="black" />
+                    START MISSION
+                    <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+
+                  <button
+                    onClick={() => startGame(true)}
+                    className="group relative flex items-center gap-[1.5cqw] px-[4cqw] py-[1.5cqw] bg-purple-600 hover:bg-purple-500 text-white font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+                  >
+                    <Zap className="w-[2.5cqw] h-[2.5cqw]" fill="white" />
+                    INFINITY MODE
+                    <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+
+                  <button
+                    onClick={() => setShowHallOfFame(true)}
+                    className="group relative flex items-center gap-[1.5cqw] px-[3cqw] py-[1.5cqw] bg-transparent border-2 border-yellow-500 text-yellow-500 font-black text-[1.5cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(234,179,8,0.2)]"
+                  >
+                    <Trophy className="w-[2.5cqw] h-[2.5cqw]" />
+                    HALL OF FAME
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-4 gap-[2cqw] text-[1.1cqw] text-green-500/40 uppercase tracking-widest w-full max-w-[85cqw]">
+                  <div className="flex flex-col items-center">
+                    <span>Mouse / Arrows</span>
+                    <span className="text-green-500/70">Move Paddle</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span>Click / Space</span>
+                    <span className="text-green-500/70">Launch / Fire</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-purple-400 font-black">Key E (30 NRG)</span>
+                    <span className="text-white">Force Push</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span className="text-cyan-400 font-black">Key T (50 NRG)</span>
+                    <span className="text-white">Time Slow</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span>P Key</span>
+                    <span className="text-green-500/70">Pause Game</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span>M Key</span>
+                    <span className="text-green-500/70">Mute Audio</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span>F Key</span>
+                    <span className="text-green-500/70">Fullscreen</span>
+                  </div>
+                  <div className="flex flex-col items-center">
+                    <span>ESC Key</span>
+                    <span className="text-green-500/70">Exit Menu</span>
+                  </div>
+                </div>
               </div>
               
-              <div className="flex flex-wrap justify-center gap-[2cqw] z-10 mb-[4cqh]">
-                <button
-                  onClick={() => startGame(false)}
-                  className="group relative flex items-center gap-[1.5cqw] px-[5cqw] py-[1.5cqw] bg-green-600 hover:bg-green-500 text-black font-black text-[2cqw] rounded-sm transition-all transform hover:scale-110 shadow-[0_0_30px_rgba(0,255,0,0.5)]"
-                >
-                  <Play className="w-[3cqw] h-[3cqw]" fill="black" />
-                  START MISSION
-                  <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-
-                <button
-                  onClick={() => startGame(true)}
-                  className="group relative flex items-center gap-[1.5cqw] px-[4cqw] py-[1.5cqw] bg-purple-600 hover:bg-purple-500 text-white font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-110 shadow-[0_0_30px_rgba(168,85,247,0.5)]"
-                >
-                  <Zap className="w-[2.5cqw] h-[2.5cqw]" fill="white" />
-                  INFINITY MODE
-                  <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                </button>
-
-                <button
-                  onClick={() => setShowHallOfFame(true)}
-                  className="group relative flex items-center gap-[1.5cqw] px-[3cqw] py-[1.5cqw] bg-transparent border-2 border-yellow-500 text-yellow-500 font-black text-[1.5cqw] rounded-sm transition-all transform hover:scale-110 shadow-[0_0_20px_rgba(234,179,8,0.3)]"
-                >
-                  <Trophy className="w-[2.5cqw] h-[2.5cqw]" />
-                  HALL OF FAME
-                </button>
-              </div>
-              
-              <div className="absolute bottom-0 w-full bg-black/80 border-t-[0.4cqw] border-green-500 py-[2cqh] overflow-hidden z-10 h-[15cqh] flex items-center">
+              <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center">
                 <RetroScroller text={scrollerText} />
-              </div>
-
-              <div className="mt-[1cqh] grid grid-cols-3 gap-[3cqw] text-[1cqw] text-green-500/40 uppercase tracking-widest z-10 mb-[25cqh] w-full max-w-[80cqw]">
-                <div className="flex flex-col items-center">
-                  <span>Mouse</span>
-                  <span className="text-green-500">Move Paddle</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span>Click / Space</span>
-                  <span className="text-green-500">Launch / Fire</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span>P Key</span>
-                  <span className="text-green-500">Pause Game</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span>M Key</span>
-                  <span className="text-green-500">Mute Audio</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span>F Key</span>
-                  <span className="text-green-500">Fullscreen</span>
-                </div>
-                <div className="flex flex-col items-center">
-                  <span>ESC Key</span>
-                  <span className="text-green-500">Exit Fullscreen</span>
-                </div>
               </div>
             </motion.div>
           )}
@@ -2804,190 +3123,121 @@ export const Game: React.FC = () => {
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20"
+              className="absolute inset-0 flex flex-col items-center justify-center bg-black/90 z-20 overflow-hidden"
             >
-              <div className="text-center p-[1cqw] border-[0.2cqw] border-green-500 bg-black shadow-[0_0_40px_rgba(0,255,0,0.15)] max-w-[50cqw] w-full mx-[2cqw] relative overflow-hidden rounded-md">
+              <div className="text-center p-[2cqw] border-[0.2cqw] border-green-500 bg-black shadow-[0_0_40px_rgba(0,255,0,0.15)] max-w-[85cqw] w-full mx-[2cqw] relative overflow-hidden rounded-md flex flex-col max-h-[95cqh]">
                 {/* Background decorative elements */}
                 <div className="absolute top-0 left-0 w-full h-[0.1cqw] bg-gradient-to-r from-transparent via-green-500 to-transparent animate-pulse" />
                 <div className="absolute bottom-0 left-0 w-full h-[0.1cqw] bg-gradient-to-r from-transparent via-green-500 to-transparent animate-pulse" />
                 
-                {gameState === 'LEVEL_COMPLETE' ? (
-                  <div className="flex flex-col items-center py-[0.8cqw]">
-                    <motion.div
-                      animate={{ 
-                        scale: [1, 1.1, 1],
-                        filter: ["brightness(1)", "brightness(1.3)", "brightness(1)"]
-                      }}
-                      transition={{ duration: 1.5, repeat: Infinity }}
-                    >
-                      <Zap className="w-[3cqw] h-[3cqw] text-blue-400 mb-[0.8cqw] drop-shadow-[0_0_15px_rgba(96,165,250,0.8)]" />
-                    </motion.div>
-                    
-                    <h2 className="text-[3cqw] font-black italic text-blue-500 mb-[0.2cqw] tracking-tighter drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] leading-none">SECTOR CLEAR</h2>
-                    <p className="text-blue-400/60 mb-[1.5cqw] uppercase tracking-[0.4em] font-bold text-[0.8cqw]">Mission Objective Achieved</p>
-                    
-                    <button
-                      onClick={startNextLevel}
-                      className="group relative flex items-center justify-center gap-[1cqw] px-[4cqw] py-[0.8cqw] bg-blue-600 hover:bg-blue-500 text-black font-black text-[1.5cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95"
-                    >
-                      <Play className="w-[1.5cqw] h-[1.5cqw]" fill="black" />
-                      CONTINUE
-                      <div className="absolute -inset-[0.2cqw] border-[0.1cqw] border-blue-300 opacity-0 group-hover:opacity-100 transition-opacity animate-pulse" />
-                    </button>
-                    
-                    <p className="mt-[1cqw] text-blue-400/40 text-[0.7cqw] uppercase tracking-widest animate-pulse">Click or press any key to proceed</p>
-                  </div>
-                ) : gameState === 'WIN' ? (
-                  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black overflow-hidden">
-                    {winBgImage && (
-                      <div className="absolute inset-0 opacity-40">
-                        <img 
-                          src={winBgImage.src} 
-                          alt="Victory Background" 
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    )}
-                    
-                    <div className="relative z-10 flex flex-col items-center text-center px-[4cqw]">
+                <div className="flex-1 overflow-y-auto custom-scrollbar px-[1cqw] py-[2cqw]">
+                  {gameState === 'LEVEL_COMPLETE' ? (
+                    <div className="flex flex-col items-center py-[1cqw]">
                       <motion.div
-                        initial={{ scale: 0, rotate: -180 }}
-                        animate={{ scale: 1, rotate: 0 }}
-                        transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                        className="mb-[2cqw]"
+                        animate={{ 
+                          scale: [1, 1.1, 1],
+                          filter: ["brightness(1)", "brightness(1.3)", "brightness(1)"]
+                        }}
+                        transition={{ duration: 1.5, repeat: Infinity }}
                       >
-                        <Trophy className="w-[10cqw] h-[10cqw] text-yellow-400 drop-shadow-[0_0_30px_rgba(250,204,21,1)]" />
+                        <Zap className="w-[4cqw] h-[4cqw] text-blue-400 mb-[0.8cqw] drop-shadow-[0_0_15px_rgba(96,165,250,0.8)]" />
                       </motion.div>
                       
-                      <motion.h2 
-                        initial={{ y: 50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.5 }}
-                        className="text-[8cqw] font-black italic text-green-500 mb-[0.5cqw] tracking-tighter leading-none drop-shadow-[0_0_20px_rgba(34,197,94,0.8)]"
-                      >
-                        GALAXY SAVED
-                      </motion.h2>
+                      <h2 className="text-[4cqw] font-black italic text-blue-500 mb-[0.2cqw] tracking-tighter drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] leading-none uppercase">Sector Clear</h2>
+                      <p className="text-blue-400/60 mb-[1.5cqw] uppercase tracking-[0.4em] font-bold text-[1.2cqw]">Mission Objective Achieved</p>
                       
-                      <motion.p 
-                        initial={{ y: 30, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.8 }}
-                        className="text-white text-[2cqw] uppercase tracking-[0.5em] font-bold mb-[4cqw]"
+                      <button
+                        onClick={startNextLevel}
+                        className="group relative flex items-center justify-center gap-[1cqw] px-[4cqw] py-[1cqw] bg-blue-600 hover:bg-blue-500 text-black font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(37,99,235,0.4)] active:scale-95"
                       >
-                        You are the ultimate champion
-                      </motion.p>
+                        <Play className="w-[1.8cqw] h-[1.8cqw]" fill="black" />
+                        CONTINUE
+                        <div className="absolute -inset-[0.2cqw] border-[0.1cqw] border-blue-300 opacity-0 group-hover:opacity-100 transition-opacity animate-pulse" />
+                      </button>
                       
-                      <motion.div 
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 1.5 }}
-                        className="bg-black/80 border-2 border-green-500/30 p-[3cqw] rounded-2xl backdrop-blur-md max-w-[60cqw]"
-                      >
-                        <p className="text-green-400 text-[1.5cqw] leading-relaxed mb-[2cqw] font-mono italic">
-                          PILOT, YOUR BRAVERY AND SKILL HAVE BROUGHT PEACE TO THE SECTOR. 
-                          ALL 100 SECTORS ARE NOW CLEAR OF THE COSMIC BRICK THREAT. 
-                          THE GALAXY WILL FOREVER REMEMBER YOUR NAME.
-                        </p>
-                        <p className="text-white/60 text-[1cqw] uppercase tracking-widest font-bold">
-                          Thank you for playing MEGABALL AiGA
-                        </p>
-                        <p className="text-white/40 text-[0.8cqw] mt-[1cqw]">
-                          A tribute to the legends of the 32-bit era.
-                        </p>
-                      </motion.div>
-                      
-                      <motion.div 
-                        initial={{ y: 50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 2 }}
-                        className="mt-[4cqw] flex flex-col items-center gap-[2cqw]"
-                      >
-                        <div className="p-[1.5cqw] border-2 border-yellow-500/30 bg-yellow-500/5 rounded-xl">
-                          <span className="text-[1cqw] text-yellow-500/60 uppercase block mb-[0.2cqw] tracking-[0.3em]">Legendary Final Score</span>
-                          <span className="text-[6cqw] font-black text-white tracking-tighter drop-shadow-[0_0_20px_rgba(255,255,255,0.5)] leading-none">{score.toLocaleString()}</span>
+                      <p className="mt-[1.5cqw] text-blue-400/40 text-[1cqw] uppercase tracking-widest animate-pulse">Click or press any key to proceed</p>
+                    </div>
+                  ) : gameState === 'WIN' ? (
+                    <div className="flex flex-col items-center py-[2cqw] relative">
+                      {winBgImage && (
+                        <div className="absolute inset-0 opacity-20 pointer-events-none">
+                          <img src={winBgImage.src} alt="" className="w-full h-full object-cover" />
                         </div>
-                        
-                        <button 
-                          onClick={backToMenu}
-                          className="group relative px-[4cqw] py-[1.5cqw] bg-green-600 hover:bg-green-500 text-black font-black italic text-[2cqw] uppercase tracking-tighter rounded-sm transition-all transform hover:scale-105 active:scale-95 shadow-[0_0_20px_rgba(34,197,94,0.4)]"
-                        >
-                          <div className="flex items-center gap-[1cqw]">
-                            <RotateCcw className="w-[2.5cqw] h-[2.5cqw] group-hover:rotate-180 transition-transform duration-500" />
-                            Return to Base
-                          </div>
-                        </button>
-                      </motion.div>
-                    </div>
-                    
-                    <div className="absolute bottom-0 left-0 w-full h-[10cqh] bg-gradient-to-t from-green-500/20 to-transparent">
-                      <RetroScroller text="*** MISSION ACCOMPLISHED *** GALAXY SECURED *** YOU ARE THE MEGABALL AiGA CHAMPION *** THANK YOU FOR EXPERIENCING THIS RETRO JOURNEY *** GREETINGS TO THE LEGENDS *** OVER AND OUT! ***   " />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center py-[0.8cqw]">
-                    <motion.div
-                      animate={{
-                        scale: [1, 1.1, 1],
-                        rotate: [-3, 3, -3]
-                      }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                    >
-                      <h2 className="text-[4cqw] font-black italic text-red-600 mb-[0.8cqw] drop-shadow-[0_0_20px_rgba(220,38,38,0.8)] tracking-tighter leading-none">MISSION FAILED</h2>
-                    </motion.div>
-                    <p className="text-red-500/60 mb-[1.5cqw] uppercase tracking-[0.5em] font-bold text-[1cqw]">System Overload - Game Over</p>
-                  </div>
-                )}
-                
-                <div className="flex flex-col items-center gap-[1cqw]">
-                  <div className="p-[1cqw] border-[0.1cqw] border-green-500/30 bg-green-500/5 rounded-xl inline-block">
-                    <span className="text-[0.7cqw] text-green-500/40 uppercase block mb-[0.1cqw] tracking-[0.3em]">Final Tactical Score</span>
-                    <span className="text-[4cqw] font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] leading-none">{score.toLocaleString()}</span>
-                  </div>
-                  
-                  {gameState === 'GAMEOVER' && !showHallOfFame && (
-                    <div className="mt-[1cqw] w-full max-w-[30cqw] space-y-[1cqw]">
-                      <p className="text-yellow-500 text-[1cqw] uppercase tracking-widest font-bold">Enter Name for Hall of Fame</p>
-                      <div className="flex gap-[0.5cqw]">
-                        <input 
-                          type="text"
-                          maxLength={20}
-                          value={playerName}
-                          onChange={(e) => setPlayerName(e.target.value)}
-                          placeholder="PILOT NAME"
-                          className="flex-1 bg-black border-2 border-green-500/50 text-green-500 px-[1cqw] py-[0.5cqw] text-[1.2cqw] focus:outline-none focus:border-green-400"
-                        />
-                        <button 
-                          onClick={submitScore}
-                          disabled={!playerName.trim() || isSubmittingScore}
-                          className="bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-black p-[0.5cqw] rounded-sm transition-all"
-                        >
-                          <Send className="w-[2cqw] h-[2cqw]" />
-                        </button>
+                      )}
+                      <div className="relative z-10 flex flex-col items-center">
+                        <Trophy className="w-[8cqw] h-[8cqw] text-yellow-500 mb-[2cqw] animate-bounce" />
+                        <h2 className="text-[6cqw] font-black italic text-yellow-500 mb-[0.5cqw] tracking-tighter drop-shadow-[0_0_20px_rgba(234,179,8,0.8)] uppercase leading-none">Victory Over Space</h2>
+                        <p className="text-yellow-400/60 mb-[2cqw] uppercase tracking-[0.4em] font-bold text-[1.4cqw]">The Galaxy is Safe!</p>
+                        <div className="bg-green-500/10 border border-green-500/30 p-[2cqw] rounded-lg mb-[3cqw] max-w-[50cqw]">
+                           <p className="text-green-400 text-[1.4cqw] italic font-mono leading-relaxed">
+                             PILOT, YOUR BRAVERY HAS ENDED THE THREAT. ALL SECTORS ARE SECURE. THE GALAXY SALUTES YOU!
+                           </p>
+                        </div>
                       </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center py-[1cqw]">
+                      <motion.div
+                        animate={{
+                          scale: [1, 1.1, 1],
+                          rotate: [-3, 3, -3]
+                        }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                      >
+                        <h2 className="text-[5cqw] font-black italic text-red-600 mb-[0.8cqw] drop-shadow-[0_0_20px_rgba(220,38,38,0.8)] tracking-tighter leading-none uppercase">Mission Failed</h2>
+                      </motion.div>
+                      <p className="text-red-500/60 mb-[1.5cqw] uppercase tracking-[0.5em] font-bold text-[1.4cqw]">System Overload - Game Over</p>
                     </div>
                   )}
+                  
+                  <div className="flex flex-col items-center gap-[2cqw] mb-[2cqw]">
+                    <div className="p-[1.5cqw] border-[0.1cqw] border-green-500/30 bg-green-500/5 rounded-xl inline-block w-full max-w-[45cqw]">
+                      <span className="text-[1cqw] text-green-500/40 uppercase block mb-[0.2cqw] tracking-[0.3em]">Final Tactical Score</span>
+                      <span className="text-[5.5cqw] font-black text-white tracking-tighter drop-shadow-[0_0_15px_rgba(255,255,255,0.4)] leading-none">{score.toLocaleString()}</span>
+                    </div>
+                    
+                    {gameState === 'GAMEOVER' && !showHallOfFame && (
+                      <div className="mt-[1cqw] w-full max-w-[45cqw] space-y-[1.5cqw] bg-black/40 p-[1.5cqw] border border-yellow-500/20 rounded">
+                        <p className="text-yellow-500 text-[1.2cqw] uppercase tracking-widest font-bold">Transmit ID to Command</p>
+                        <div className="flex gap-[0.5cqw]">
+                          <input 
+                            type="text"
+                            maxLength={20}
+                            value={playerName}
+                            onChange={(e) => setPlayerName(e.target.value)}
+                            placeholder="PILOT NAME"
+                            className="flex-1 bg-black border-2 border-green-500/50 text-green-500 px-[1.5cqw] py-[0.8cqw] text-[1.5cqw] focus:outline-none focus:border-green-400 uppercase font-bold"
+                          />
+                          <button 
+                            onClick={submitScore}
+                            disabled={!playerName.trim() || isSubmittingScore}
+                            className="bg-green-600 hover:bg-green-500 disabled:bg-gray-700 text-black px-[2cqw] rounded-sm transition-all shadow-[0_0_15px_rgba(0,255,0,0.3)]"
+                          >
+                            <Send className="w-[2.5cqw] h-[2.5cqw]" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                  <div className="p-[0.8cqw] border-[0.1cqw] border-yellow-500/30 bg-yellow-500/5 rounded-xl inline-block">
-                    <span className="text-[0.6cqw] text-yellow-500/40 uppercase block mb-[0.1cqw] tracking-[0.3em]">High Score</span>
-                    <span className="text-[3cqw] font-black text-yellow-400 tracking-tighter drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] leading-none">{highScore.toLocaleString()}</span>
+                    <div className="p-[1.2cqw] border-[0.1cqw] border-yellow-500/30 bg-yellow-500/5 rounded-xl inline-block w-full max-w-[35cqw]">
+                      <span className="text-[0.9cqw] text-yellow-500/40 uppercase block mb-[0.2cqw] tracking-[0.3em]">Sector High Score</span>
+                      <span className="text-[4cqw] font-black text-yellow-400 tracking-tighter drop-shadow-[0_0_10px_rgba(250,204,21,0.4)] leading-none">{highScore.toLocaleString()}</span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap justify-center gap-[1.5cqw] mt-[0.5cqw]">
-                  {gameState !== 'LEVEL_COMPLETE' && (
-                    <button
-                      onClick={startGame}
-                      className="flex items-center justify-center gap-[1cqw] px-[3cqw] py-[0.8cqw] bg-green-700 hover:bg-green-600 text-black font-black text-[1.2cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_10px_rgba(0,255,0,0.2)]"
-                    >
-                      <RotateCcw className="w-[1.2cqw] h-[1.2cqw]" />
-                      TRY AGAIN
-                    </button>
-                  )}
+                <div className="flex flex-wrap justify-center gap-[2cqw] mt-auto py-[2cqw] border-t border-white/5 bg-black z-10">
+                  <button
+                    onClick={gameState === 'LEVEL_COMPLETE' ? startNextLevel : startGame}
+                    className="flex items-center justify-center gap-[1cqw] px-[4cqw] py-[1.2cqw] bg-green-700 hover:bg-green-600 text-black font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_15px_rgba(0,255,0,0.2)]"
+                  >
+                    {gameState === 'LEVEL_COMPLETE' ? <Play className="w-[1.8cqw] h-[1.8cqw]" /> : <RotateCcw className="w-[1.8cqw] h-[1.8cqw]" />}
+                    {gameState === 'LEVEL_COMPLETE' ? 'NEXT MISSION' : 'TRY AGAIN'}
+                  </button>
                   
                   <button
                     onClick={backToMenu}
-                    className="flex items-center justify-center gap-[1cqw] px-[3cqw] py-[0.8cqw] bg-transparent border-[0.1cqw] border-green-700 hover:bg-green-700/20 text-green-600 font-bold text-[1.2cqw] rounded-sm transition-all"
+                    className="flex items-center justify-center gap-[1cqw] px-[4cqw] py-[1.2cqw] bg-transparent border-2 border-green-700 hover:bg-green-700/20 text-green-600 font-bold text-[1.8cqw] rounded-sm transition-all"
                   >
                     BACK TO MENU
                   </button>
@@ -3000,23 +3250,23 @@ export const Game: React.FC = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 flex items-center justify-center bg-black/95 z-[60] backdrop-blur-md"
+              className="absolute inset-0 flex items-center justify-center bg-black/95 z-[60] backdrop-blur-md p-[2cqw]"
             >
-              <div className="w-full max-w-[60cqw] p-[3cqw] border-4 border-yellow-500/50 bg-black rounded-lg relative">
+              <div className="w-full max-w-[80cqw] max-h-[90cqh] p-[3cqw] border-4 border-yellow-500/50 bg-black rounded-lg relative flex flex-col shadow-[0_0_50px_rgba(234,179,8,0.1)]">
                 <button 
                   onClick={() => setShowHallOfFame(false)}
-                  className="absolute top-[1cqw] right-[1cqw] text-yellow-500 hover:text-white transition-colors"
+                  className="absolute top-[1cqw] right-[1cqw] text-yellow-500 hover:text-white transition-colors z-10"
                 >
-                  <Play className="w-[2cqw] h-[2cqw] rotate-180" />
+                  <RotateCcw className="w-[2cqw] h-[2cqw] rotate-180" />
                 </button>
                 
-                <div className="text-center mb-[2cqw]">
+                <div className="text-center mb-[2cqw] shrink-0">
                   <Trophy className="w-[5cqw] h-[5cqw] text-yellow-500 mx-auto mb-[1cqw] animate-bounce" />
-                  <h2 className="text-[4cqw] font-black italic text-yellow-500 tracking-tighter uppercase">Hall of Fame</h2>
-                  <p className="text-yellow-500/50 text-[1cqw] uppercase tracking-[0.5em]">Top Galactic Pilots</p>
+                  <h2 className="text-[4cqw] font-black italic text-yellow-500 tracking-tighter uppercase leading-none">Hall of Fame</h2>
+                  <p className="text-yellow-500/50 text-[1.2cqw] uppercase tracking-[0.5em] mt-[0.5cqw]">Top Galactic Pilots</p>
                 </div>
 
-                <div className="space-y-[1cqw] max-h-[40cqh] overflow-y-auto pr-[1cqw] custom-scrollbar">
+                <div className="space-y-[0.5cqw] overflow-y-auto pr-[1cqw] custom-scrollbar flex-1 min-h-0">
                   {highScores.length === 0 ? (
                     <p className="text-center text-white/20 py-[4cqw] uppercase tracking-widest italic">No records found in this sector...</p>
                   ) : (
@@ -3026,16 +3276,16 @@ export const Game: React.FC = () => {
                         className={`flex items-center justify-between p-[1cqw] border-b border-white/10 ${i === 0 ? 'bg-yellow-500/10 border-yellow-500/30' : ''}`}
                       >
                         <div className="flex items-center gap-[2cqw]">
-                          <span className={`text-[1.5cqw] font-black w-[3cqw] ${i === 0 ? 'text-yellow-500' : 'text-white/40'}`}>
+                          <span className={`text-[2cqw] font-black w-[4cqw] ${i === 0 ? 'text-yellow-500' : 'text-white/40'}`}>
                             {(i + 1).toString().padStart(2, '0')}
                           </span>
                           <div className="flex flex-col">
-                            <span className="text-[1.8cqw] font-bold text-white uppercase tracking-tight">{entry.playerName}</span>
-                            <span className="text-[0.8cqw] text-white/40 uppercase">Sector {entry.level}</span>
+                            <span className="text-[2cqw] font-bold text-white uppercase tracking-tight leading-none">{entry.playerName}</span>
+                            <span className="text-[1cqw] text-white/40 uppercase mt-[0.2cqw]">Sector {entry.level}</span>
                           </div>
                         </div>
                         <div className="text-right">
-                          <span className={`text-[2.2cqw] font-black ${i === 0 ? 'text-yellow-400' : 'text-green-400'}`}>
+                          <span className={`text-[2.5cqw] font-black ${i === 0 ? 'text-yellow-400' : 'text-green-400'}`}>
                             {entry.score.toLocaleString()}
                           </span>
                         </div>
@@ -3044,10 +3294,10 @@ export const Game: React.FC = () => {
                   )}
                 </div>
 
-                <div className="mt-[3cqw] text-center">
+                <div className="mt-[2cqw] text-center shrink-0">
                   <button 
                     onClick={() => setShowHallOfFame(false)}
-                    className="px-[4cqw] py-[1cqw] bg-yellow-600 hover:bg-yellow-500 text-black font-black text-[1.2cqw] rounded-sm transition-all"
+                    className="px-[5cqw] py-[1cqw] bg-yellow-600 hover:bg-yellow-500 text-black font-black text-[1.5cqw] rounded-sm transition-all shadow-[0_0_20px_rgba(234,179,8,0.3)]"
                   >
                     RETURN TO BASE
                   </button>

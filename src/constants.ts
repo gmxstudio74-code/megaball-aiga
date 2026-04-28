@@ -51,7 +51,6 @@ export enum PowerUpType {
   EXPLOSION = 'EXPLOSION',
   BLACK_HOLE = 'BLACK_HOLE',
   GHOST_PADDLE = 'GHOST_PADDLE',
-  PORTAL = 'PORTAL',
 }
 
 export const POWERUP_WIDTH = 40;
@@ -118,14 +117,22 @@ export interface Portal {
   color: string;
 }
 
+export type PhysicalObjectType = 'GEAR' | 'FAN' | 'MAGNET' | 'WARP_GATE' | 'CRUSHER' | 'CONVEYOR';
+
 export interface PhysicalObject {
   id: string;
   x: number;
   y: number;
-  type: 'GEAR' | 'FAN' | 'MAGNET';
+  type: PhysicalObjectType;
   radius: number;
+  width?: number;
+  height?: number;
   rotation?: number;
   strength?: number;
+  targetId?: string; // For Warp Gates
+  state?: 'EXTENDED' | 'RETRACTED' | 'MOVING'; // For Crushers
+  lastMoveTime?: number;
+  direction?: 'LEFT' | 'RIGHT'; // For Conveyors
 }
 
 declare global {
