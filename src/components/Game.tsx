@@ -679,8 +679,8 @@ export const Game: React.FC = () => {
           }
         }
       } else {
-        const patternType = Math.floor(rng(seed) * 10);
-        const maxBrickRows = 10; 
+        const patternType = Math.floor(rng(seed) * 16);
+        const maxBrickRows = 12; // Increased for taller designs
 
         for (let r = 0; r < maxBrickRows; r++) {
           for (let c = 0; c < cols; c++) {
@@ -689,7 +689,6 @@ export const Game: React.FC = () => {
             const symC = c < 10 ? c : 19 - c; // Symmetrical column index
             const diffR = Math.abs(r - midR);
             const diffC = Math.abs(c - midC);
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const symDiffC = Math.abs(symC - 4.5); 
 
             switch(patternType) {
@@ -702,6 +701,30 @@ export const Game: React.FC = () => {
               case 6: spawn = (r < 9) && (Math.abs(r - symC) < 2); break; // V / X shape
               case 7: spawn = r < 8 && (Math.sin(symC * 0.8) * 3 + 4 > r); break; // Waves
               case 8: spawn = (r < 8) && (r + symC < 8); break; // Corner clusters
+              case 9: // Heart
+                const heartX = (c - 9.5) / 5;
+                const heartY = (r - 4) / 5;
+                spawn = Math.pow(heartX*heartX + heartY*heartY - 1, 3) - heartX*heartX*heartY*heartY*heartY <= 0;
+                break;
+              case 10: // Checkerboard
+                spawn = r < 10 && (r + c) % 2 === 0;
+                break;
+              case 11: // Rings
+                const distToCenter = Math.sqrt(diffR * diffR + diffC * diffC);
+                spawn = Math.floor(distToCenter) % 3 === 0 && distToCenter < 9;
+                break;
+              case 12: // Space Invader (roughly)
+                const invaderRows = [
+                  [0,0,1,0,0], [0,1,1,1,0], [1,1,1,1,1], [1,0,1,0,1], [1,1,1,1,1], [0,1,0,1,0]
+                ];
+                if (r < 6 && symC < 5) spawn = invaderRows[r][Math.floor(symC)] === 1;
+                break;
+              case 13: // Zig Zag
+                spawn = r < 10 && (c % 6 === r % 6 || (6-c%6) === r % 6);
+                break;
+              case 14: // Frame within frame
+                spawn = r < 10 && (r % 4 === 0 || c % 4 === 0);
+                break;
               default: spawn = r < 8 && rng(seed + r * 37 + symC) < 0.5; // Random Symmetric
             }
 
@@ -714,14 +737,14 @@ export const Game: React.FC = () => {
               let revealed = true;
 
               if (currentLevel > 3) {
-                if (rand < 0.05) { type = 'TNT'; color = '#ff3300'; }
-                else if (rand < 0.10) { type = 'SLIME'; color = '#33ff33'; }
-                else if (rand < 0.13) { type = 'PORTAL'; color = '#aa00ff'; }
-                else if (rand < 0.16) { type = 'FIRE'; color = '#ff9900'; }
-                else if (rand < 0.19) { type = 'ICE'; color = '#00ffff'; }
-                else if (rand < 0.22) { type = 'GHOST'; color = 'rgba(255,255,255,0.4)'; }
-                else if (rand < 0.25) { type = 'INVISIBLE'; revealed = false; color = '#444444'; }
-                else if (rand < 0.30 && currentLevel > 10) { type = 'HARD'; color = '#888888'; hits = 3; }
+                if (rand < 0.03) { type = 'TNT'; color = '#ff3300'; }
+                else if (rand < 0.06) { type = 'SLIME'; color = '#33ff33'; }
+                else if (rand < 0.08) { type = 'PORTAL'; color = '#aa00ff'; }
+                else if (rand < 0.10) { type = 'FIRE'; color = '#ff9900'; }
+                else if (rand < 0.12) { type = 'ICE'; color = '#00ffff'; }
+                else if (rand < 0.14) { type = 'GHOST'; color = 'rgba(255,255,255,0.4)'; }
+                else if (rand < 0.16) { type = 'INVISIBLE'; revealed = false; color = '#444444'; }
+                else if (rand < 0.20 && currentLevel > 10) { type = 'HARD'; color = '#888888'; hits = 3; }
               }
 
               bricks.push({
@@ -3450,7 +3473,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v1.8.0428.1223
+                      RELEASE v1.8.0428.1245
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
