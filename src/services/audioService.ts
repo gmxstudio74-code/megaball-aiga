@@ -13,7 +13,7 @@ class AudioService {
   constructor() {
     if (typeof window !== 'undefined') {
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const GITHUB_BASE = 'https://raw.githubusercontent.com/gmxstudio74-code/filesformegaball/main/';
+      const LOCAL_DATA = '/data/';
       
       const playlistFiles = [
         'copper_bars.mp3',
@@ -25,25 +25,25 @@ class AudioService {
       ];
 
       playlistFiles.forEach((file, index) => {
-        const audio = new Audio(GITHUB_BASE + encodeURIComponent(file));
+        const audio = new Audio(LOCAL_DATA + encodeURIComponent(file));
         audio.volume = 0.6;
         audio.addEventListener('ended', () => this.handleTrackEnded());
         this.playlist.push(audio);
       });
 
-      this.atariMusic = new Audio(GITHUB_BASE + encodeURIComponent('Coppe_ Bar_ at_Dawn_Chip.mp3'));
+      this.atariMusic = new Audio(LOCAL_DATA + encodeURIComponent('Coppe_ Bar_ at_Dawn_Chip.mp3'));
       this.atariMusic.loop = true;
       this.atariMusic.volume = 0.6;
 
-      this.infinityMusic = new Audio(GITHUB_BASE + encodeURIComponent('Copper_Bars_at_Dawn_Infinity.mp3'));
+      this.infinityMusic = new Audio(LOCAL_DATA + encodeURIComponent('Copper_Bars_at_Dawn_Infinity.mp3'));
       this.infinityMusic.loop = true;
       this.infinityMusic.volume = 0.6;
 
-      this.victoryMusic = new Audio(GITHUB_BASE + encodeURIComponent('The_End.mp3'));
+      this.victoryMusic = new Audio(LOCAL_DATA + encodeURIComponent('The_End.mp3'));
       this.victoryMusic.loop = false;
       this.victoryMusic.volume = 0.6;
       
-      this.gameOverSound = new Audio(GITHUB_BASE + encodeURIComponent('game_over.mp3'));
+      this.gameOverSound = new Audio(LOCAL_DATA + encodeURIComponent('game_over.mp3'));
       this.gameOverSound.volume = 0.6;
     }
   }
