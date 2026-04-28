@@ -1,2 +1,3 @@
-# Documentation for MegaBall data folder
-Place all your background images (bg1.jpg, bg2.jpg, etc.) and music files (mp3) here.
+# MegaBall Assets
+Place your bg*.jpg and mp3 files here.
+Path: /public/data/
