@@ -1940,14 +1940,39 @@ export const Game: React.FC = () => {
     // Physical Objects Update & Movement
     physicalObjectsRef.current.forEach((obj, idx) => {
       if (obj.type !== 'WARP_GATE' && level >= 3) {
-        const timeOffset = idx * 1000;
+        const baseSpeed = 0.85;
+        const isLeft = obj.x < GAME_WIDTH / 2;
         
-        const vx = Math.cos((now + timeOffset) / 1000) * (idx % 2 === 0 ? 0.8 : -0.8);
-        const vy = Math.sin((now + timeOffset) / 1200) * (idx % 3 === 0 ? 1.0 : -0.6);
+        // Symmetric movement: left side moves normally, right side is mirrored
+        const vx = Math.cos(now / 1300) * baseSpeed * (isLeft ? 1 : -1);
+        const vy = Math.sin(now / 1600) * baseSpeed;
+        
+        const oldX = obj.x;
+        const oldY = obj.y;
         
         obj.x += vx * speedMultiplier;
         obj.y += vy * speedMultiplier;
         
+        // Brick Collision (Avoid overlapping with bricks)
+        let collision = false;
+        bricksRef.current.forEach(brick => {
+          if (!brick.active || collision) return;
+          
+          // Simple circle-rect collision
+          const closestX = Math.max(brick.x, Math.min(obj.x, brick.x + brick.width));
+          const closestY = Math.max(brick.y, Math.min(obj.y, brick.y + brick.height));
+          const distance = Math.sqrt((obj.x - closestX) ** 2 + (obj.y - closestY) ** 2);
+          
+          if (distance < obj.radius) {
+            collision = true;
+          }
+        });
+
+        if (collision) {
+          obj.x = oldX;
+          obj.y = oldY;
+        }
+
         // Inter-object collision (Physics)
         for (let j = idx + 1; j < physicalObjectsRef.current.length; j++) {
           const other = physicalObjectsRef.current[j];
@@ -1971,9 +1996,9 @@ export const Game: React.FC = () => {
           }
         }
 
-        // Rotation for gears/fans
+        // Rotation for gears/fans: Mirrored direction
         if (obj.rotation !== undefined) {
-          obj.rotation += 0.05 * speedMultiplier;
+          obj.rotation += 0.06 * speedMultiplier * (isLeft ? 1 : -1);
         }
 
         // Keep within bounds
@@ -3348,7 +3373,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v1.7.0428.0846
+                      RELEASE v1.7.0428.1105
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
