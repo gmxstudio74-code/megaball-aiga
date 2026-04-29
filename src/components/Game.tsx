@@ -3387,9 +3387,9 @@ export const Game: React.FC = () => {
           [container-type:size] self-center`}
       >
         {/* HUD with Copper Effect */}
-        <div className={`relative w-full p-[1.5cqw] flex justify-between items-center bg-black z-10 border-b-2 border-green-500/50 shrink-0 overflow-hidden ${isCursorHidden ? 'cursor-none' : ''} opacity-100 transition-opacity duration-700`}>
+        <div className={`relative w-full h-[8cqw] px-[1.5cqw] flex justify-between items-center bg-black z-10 border-b-2 border-green-500/50 shrink-0 overflow-hidden ${isCursorHidden ? 'cursor-none' : ''} opacity-100 transition-opacity duration-700`}>
           <div className="absolute inset-0 bg-gradient-to-b from-green-900/20 via-transparent to-green-900/20 pointer-events-none" />
-          <div className="flex gap-[4cqw] relative z-10">
+          <div className="flex gap-[4cqw] relative z-10 h-full items-center">
             <div className="flex flex-col">
               <span className="text-[1cqw] uppercase tracking-widest text-green-500/70">Score</span>
               <span className="text-[2.5cqw] font-bold text-green-400 leading-none">{score.toString().padStart(6, '0')}</span>
@@ -3401,7 +3401,7 @@ export const Game: React.FC = () => {
                   <Heart 
                     key={i} 
                     size={16}
-                    className={`w-[1.8cqw] h-[1.8cqw] ${i < lives ? 'text-red-500 fill-red-500 drop-shadow-[0_0_3px_rgba(255,0,0,0.8)]' : 'text-gray-800'}`}
+                    className={`w-[1.8cqw] h-[1.8cqw] transition-colors duration-300 ${i < lives ? 'text-red-500 fill-red-500 drop-shadow-[0_0_3px_rgba(255,0,0,0.8)]' : 'text-gray-800'}`}
                   />
                 ))}
               </div>
@@ -3414,7 +3414,7 @@ export const Game: React.FC = () => {
               <div className="h-[2.5cqw] flex items-center gap-[1cqw]">
                 <div className="flex-1 bg-black border-2 border-[#00ff41]/20 h-[1.5cqw] rounded-sm overflow-hidden relative">
                   <motion.div 
-                    className={`h-full transition-all duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : 'bg-[#00ff41]/40'}`} 
+                    className={`h-full transition-[width,background-color] duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : 'bg-[#00ff41]/40'}`} 
                     animate={{ width: `${energy}%` }}
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
@@ -3555,7 +3555,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v2.3.0429.0635
+                      RELEASE v2.3.0429.0641
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
