@@ -87,12 +87,11 @@ interface Brick {
 }
 
 const RetroScroller = React.memo(({ text }: { text: string }) => {
-  const [offset, setOffset] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const scrollerRef = useRef<HTMLDivElement>(null);
   const charWidth = useRef(0);
   const visibleChars = useRef(0);
 
-  // Measure character width once
   useEffect(() => {
     const span = document.createElement('span');
     span.className = 'scroller-char text-[4cqw] font-mono font-black text-white italic tracking-normal';
@@ -100,13 +99,12 @@ const RetroScroller = React.memo(({ text }: { text: string }) => {
     span.style.position = 'absolute';
     span.innerText = 'M';
     document.body.appendChild(span);
-    // Measure width of a standard character in mono font
     charWidth.current = (span.getBoundingClientRect().width || 25) * 0.92;
     document.body.removeChild(span);
     
     const updateVisible = () => {
       if (containerRef.current) {
-        visibleChars.current = Math.ceil(containerRef.current.clientWidth / charWidth.current) + 10;
+        visibleChars.current = Math.ceil(containerRef.current.clientWidth / charWidth.current) + 12;
       }
     };
     updateVisible();
@@ -116,44 +114,37 @@ const RetroScroller = React.memo(({ text }: { text: string }) => {
 
   useEffect(() => {
     let animationId: number;
-    const speed = 2.2; // Increased speed
+    let offset = 0;
+    const speed = 2.4;
     
     const animate = () => {
-      setOffset(prev => (prev + speed) % (text.length * charWidth.current));
+      offset = (offset + speed) % (text.length * charWidth.current);
+      
+      if (scrollerRef.current) {
+        const startIndex = Math.floor(offset / charWidth.current);
+        const endIndex = startIndex + (visibleChars.current || 40);
+        
+        let html = '';
+        for (let i = startIndex; i < endIndex; i++) {
+          const idx = i % text.length;
+          const char = text[idx];
+          const x = i * charWidth.current - offset;
+          const content = char === " " ? "&nbsp;" : char;
+          html += `<span class="scroller-char absolute text-[4cqw] font-mono font-black text-white italic tracking-normal drop-shadow-[0_0_10px_rgba(0,255,0,0.8)]" style="left: ${x}px; transform: translateZ(0)">${content}</span>`;
+        }
+        scrollerRef.current.innerHTML = html;
+      }
+      
       animationId = requestAnimationFrame(animate);
     };
     
     animationId = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(animationId);
-  }, [text.length]);
-
-  const startIndex = Math.floor(offset / charWidth.current);
-  const endIndex = startIndex + visibleChars.current;
-  
-  const displayChars = [];
-  for (let i = startIndex; i < endIndex; i++) {
-    const idx = i % text.length;
-    displayChars.push({
-      char: text[idx],
-      key: i,
-      x: i * charWidth.current - offset
-    });
-  }
+  }, [text]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden flex items-center">
-      {displayChars.map(({ char, key, x }) => (
-        <span
-          key={key}
-          className="scroller-char absolute text-[4cqw] font-mono font-black text-white italic tracking-normal drop-shadow-[0_0_10px_rgba(0,255,0,0.8)]"
-          style={{ 
-            left: `${x}px`,
-            transform: 'translateZ(0)'
-          }}
-        >
-          {char === " " ? "\u00A0" : char}
-        </span>
-      ))}
+      <div ref={scrollerRef} className="contents" />
     </div>
   );
 });
@@ -1013,13 +1004,12 @@ export const Game: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       
       if (document.pointerLockElement === containerRef.current) {
-        // Pointer Lock movement (PC)
+        // Pointer Lock movement (PC) - Increased sensitivity and smoothed
         const movementX = (e as MouseEvent).movementX || 0;
-        if (Math.abs(movementX) > 0.5) {
+        if (Math.abs(movementX) > 0.3) {
           setHasPaddleMovedSinceLevelStart(true);
         }
-        // Scale movement based on game resolution vs screen resolution
-        const scaleX = (GAME_WIDTH / rect.width) * MOUSE_SENSITIVITY;
+        const scaleX = (GAME_WIDTH / rect.width) * MOUSE_SENSITIVITY * 1.5;
         paddleRef.current.x += movementX * scaleX;
       } else {
         // Normal movement (Touch or fallback)
@@ -1610,29 +1600,41 @@ export const Game: React.FC = () => {
 
       // Paddle collision
       if (
-        ball.dy > 0 && // Only collide if moving down
-        ball.y + BALL_RADIUS > GAME_HEIGHT - PADDLE_HEIGHT &&
-        ball.x > paddle.x &&
-        ball.x < paddle.x + paddle.width
+        ball.dy > 0 && 
+        ball.y + BALL_RADIUS > GAME_HEIGHT - PADDLE_HEIGHT - 5 && // Visual buffer
+        ball.y + BALL_RADIUS < GAME_HEIGHT && 
+        ball.x > paddle.x - 5 &&
+        ball.x < paddle.x + paddle.width + 5
       ) {
         if (activePowerUps.has(PowerUpType.GLUE)) {
           ball.isStuck = true;
           ball.stuckOffset = ball.x - paddle.x;
         } else {
-          const hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
-          ball.dx = hitPos * INITIAL_BALL_SPEED * 1.5;
-          ball.dy = -Math.abs(ball.dy);
+          // Accurate reflection physics: angle based on hit position
+          // Normalized hit position from -1 to 1
+          const relativeHitX = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
+          
+          // Max bounce angle is 75 degrees
+          const maxBounceAngle = (75 * Math.PI) / 180;
+          const bounceAngle = relativeHitX * maxBounceAngle;
+          
+          const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+          ball.dx = speed * Math.sin(bounceAngle);
+          ball.dy = -speed * Math.cos(bounceAngle);
+          
+          // Move ball outside paddle to prevent multi-hit logic errors
+          ball.y = GAME_HEIGHT - PADDLE_HEIGHT - BALL_RADIUS - 5;
+          
+          // Ensure min horizontal velocity to avoid purely vertical paths
+          if (Math.abs(ball.dx) < 1.0) ball.dx = ball.dx > 0 ? 1.0 : -1.0;
+          
           ball.isPiercing = false;
           ball.consecutiveWallHits = 0;
-          
-          // Apply spin
-          ball.spin = (paddleVelocity * 0.1);
-          
-          // Charge energy
+          ball.spin = (paddleVelocity * 0.08); // Reduced spin influence for stability
           setEnergy(e => Math.min(100, e + 5));
         }
         audioService.playSfx('paddle');
-        setPaddleShake(3);
+        setPaddleShake(4);
       }
 
       // Ghost Paddle collision
@@ -1654,9 +1656,15 @@ export const Game: React.FC = () => {
         setPaddleShake(2);
       }
 
-      // Brick collisions - Optimized: only check bricks in the vertical vicinity of the ball
+      // Brick collisions - Optimized: use spatial partitioning (simple Y-grid)
+      const ballY = ball.y;
+      const ballX = ball.x;
       const relevantBricks = bricksRef.current.filter(brick => 
-        brick.active && Math.abs(brick.y + brick.height/2 - ball.y) < 60
+        brick.active && 
+        ballY + BALL_RADIUS + 5 > brick.y && 
+        ballY - BALL_RADIUS - 5 < brick.y + brick.height &&
+        ballX + BALL_RADIUS + 5 > brick.x &&
+        ballX - BALL_RADIUS - 5 < brick.x + brick.width
       );
 
       let collidedThisFrame = false;
@@ -2078,13 +2086,20 @@ export const Game: React.FC = () => {
       if (star.y > GAME_HEIGHT) star.y = 0;
     });
 
-    // Particles
-    particlesRef.current = particlesRef.current.filter(p => {
-      p.x += p.vx;
-      p.y += p.vy;
-      p.life -= 0.02;
-      return p.life > 0;
-    });
+    // Particles - Optimized for performance
+    if (particlesRef.current.length > 0) {
+      // Limit total particles to 150 for performance
+      if (particlesRef.current.length > 150) {
+        particlesRef.current = particlesRef.current.slice(-150);
+      }
+      
+      particlesRef.current = particlesRef.current.filter(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.025; // Faster fade
+        return p.life > 0;
+      });
+    }
 
     // Power-ups timers update
     if (gameState === 'PLAYING') {
@@ -2133,14 +2148,17 @@ export const Game: React.FC = () => {
       });
     }
 
-    // Power-ups update
-    powerUpsRef.current.forEach(pu => {
-      if (!pu.active) return;
+    // Power-ups update - Optimized loop
+    const puCount = powerUpsRef.current.length;
+    for (let i = puCount - 1; i >= 0; i--) {
+      const pu = powerUpsRef.current[i];
+      if (!pu.active) continue;
       pu.y += (pu.speed || POWERUP_SPEED) * speedMultiplier;
 
       // Catch power-up
+      const caughtY = GAME_HEIGHT - PADDLE_HEIGHT;
       const ghostY = GAME_HEIGHT - PADDLE_HEIGHT - 200;
-      const isCaughtByPaddle = pu.y + POWERUP_HEIGHT > GAME_HEIGHT - PADDLE_HEIGHT &&
+      const isCaughtByPaddle = pu.y + POWERUP_HEIGHT > caughtY &&
                                pu.x + POWERUP_WIDTH > paddle.x &&
                                pu.x < paddle.x + paddle.width;
       const isCaughtByGhost = ghostPaddleActive && 
@@ -2148,15 +2166,14 @@ export const Game: React.FC = () => {
                               pu.y < ghostY + PADDLE_HEIGHT &&
                               pu.x + POWERUP_WIDTH > paddle.x - 20 &&
                               pu.x < paddle.x + paddle.width + 20;
-
+      
       if (isCaughtByPaddle || isCaughtByGhost) {
         pu.active = false;
         applyPowerUp(pu.type);
+      } else if (pu.y > GAME_HEIGHT) {
+        pu.active = false;
       }
-
-      // Miss power-up
-      if (pu.y > GAME_HEIGHT) pu.active = false;
-    });
+    }
 
     // Lasers update
     if (paddle.hasLaser) {
@@ -3473,7 +3490,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v2.1.0428.2150
+                      RELEASE v2.2.0429.0609
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
