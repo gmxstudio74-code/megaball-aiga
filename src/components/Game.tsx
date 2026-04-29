@@ -1274,7 +1274,7 @@ export const Game: React.FC = () => {
     };
   }, [gameState, level, isInfiniteMode]);
 
-  const scrollerText = "*** WELCOME TO MEGABALL AiGA - A TRIBUTE TO THE GOLDEN ERA OF COMMODORE AMIGA *** PROMPTED BY GMX *** MUSIC PROMPTED BY GMX USING SUNO AI *** GREETINGS TO ALL RETRO GAMERS WORLDWIDE *** CRACKED BY NOBODY *** PLAY LOUD AND PROUD *** EXPERIENCE THE POWER OF THE 32-BIT AGA CHIPSET *** 256 COLORS OF PURE ARCADE ADRENALINE *** REMEMBER THE DAYS OF FLOPPY DISKS AND JOYSTICK WIGGLING? *** THIS IS A LOVE LETTER TO THE 32-BIT GENERATION *** SPECIAL THANKS TO THE DEMOSCENE FOR THE ENDLESS INSPIRATION *** KEEP THE RETRO SPIRIT ALIVE *** DON'T FORGET TO GRAB THE POWER-UPS *** WATCH OUT FOR THE FIREBALL! *** CAN YOU CLEAR ALL 100 SECTORS? *** THE GALAXY IS COUNTING ON YOU PILOT *** NO QUARTERS REQUIRED *** JUST PURE SKILL AND REFLEXES *** STAY TUNED FOR MORE UPDATES *** OVER AND OUT! *** DID YOU KNOW? THE ORIGINAL MEGABALL WAS A STAPLE OF THE AMIGA SHAREWARE SCENE! *** WE ARE KEEPING THE TRADITION ALIVE WITH THIS MODERN TRIBUTE *** FEEL THE SMOOTH 60FPS ACTION *** NO LAG, NO SLOWDOWNS, JUST PURE 32-BIT POWER *** SHOUTOUTS TO ALL THE LEGENDARY GROUPS: RAZOR 1911, FAIRLIGHT, SKIDROW, AND THE REST! *** THE DEMOSCENE LIVES ON IN OUR HEARTS *** DON'T FORGET TO CHECK THE SETTINGS FOR FULLSCREEN MODE *** USE THE MOUSE TO CONTROL THE PADDLE WITH PIXEL-PERFECT PRECISION *** COLLECT THE LASER POWER-UP TO BLAST THROUGH THE BRICKS *** THE MULTIBALL WILL HELP YOU CLEAR THE SCREEN IN NO TIME *** BUT BEWARE OF THE SPEED-UP! *** YOUR REFLEXES WILL BE TESTED TO THE LIMIT *** ARE YOU READY FOR THE ULTIMATE CHALLENGE? *** LET'S GO! *** REMEMBER THE AMIGA 500, 1200, AND 4000? *** THE GLORY DAYS OF THE WORKBENCH AND DELUXE PAINT *** THIS GAME IS BUILT WITH PASSION FOR THE PIXELS *** EVERY BRICK YOU BREAK IS A NOD TO THE PAST *** CAN YOU FIND THE HIDDEN SECRETS? *** THE MUSIC WAS COMPOSED TO BRING BACK THAT MOD-TRACKER FEEL *** CRANK UP THE VOLUME AND LET THE BASS HIT *** WATCH YOUR LIVES, they ARE PRECIOUS *** EXTRA LIVES ARE RARE, so PLAY CAREFULLY *** THE PADDLE IS YOUR ONLY DEFENSE AGAINST THE COSMIC CHAOS *** MASTER THE ANGLES TO BECOME A TRUE MEGABALL PRO *** THANKS FOR PLAYING AND SUPPORTING INDIE RETRO PROJECTS *** SPREAD THE WORD AND CHALLENGE YOUR FRIENDS *** WHO WILL GET THE HIGHEST SCORE? *** THE LEADERBOARD AWAITS YOUR NAME *** KEEP ON GAMING! *** THE AMIGA 1200 BROUGHT us INTO THE 32-BIT ERA WITH STYLE *** LONG LIVE THE AMIGA! ***   ";
+  const scrollerText = "*** MEGABALL AiGA v3.3 RELEASED! *** NEW: EXPANDED 10-TRACK SOUNDTRACK WITH GAPLESS CROSSFADE MIXING *** HUD ENHANCED: HIGH SCORE MOVED TO TOP-LEFT *** FULLSCREEN AND SOUND CONTROLS RESTORED TO TOP-RIGHT *** PROMPTED BY GMX *** MUSIC PROMPTED BY GMX USING SUNO AI *** GREETINGS TO ALL RETRO GAMERS WORLDWIDE *** CRACKED BY NOBODY *** PLAY LOUD AND PROUD *** EXPERIENCE THE POWER OF THE 32-BIT AGA CHIPSET *** 256 COLORS OF PURE ARCADE ADRENALINE *** REMEMBER THE DAYS OF FLOPPY DISKS AND JOYSTICK WIGGLING? *** THIS IS A LOVE LETTER TO THE 32-BIT GENERATION *** SPECIAL THANKS TO THE DEMOSCENE FOR THE ENDLESS INSPIRATION *** KEEP THE RETRO SPIRIT ALIVE *** DON'T FORGET TO GRAB THE POWER-UPS *** WATCH OUT FOR THE FIREBALL! *** CAN YOU CLEAR ALL 100 SECTORS? *** THE GALAXY IS COUNTING ON YOU PILOT *** NO QUARTERS REQUIRED *** JUST PURE SKILL AND REFLEXES *** STAY TUNED FOR MORE UPDATES *** OVER AND OUT! *** DID YOU KNOW? THE ORIGINAL MEGABALL WAS A STAPLE OF THE AMIGA SHAREWARE SCENE! *** WE ARE KEEPING THE TRADITION ALIVE WITH THIS MODERN TRIBUTE *** FEEL THE SMOOTH 60FPS ACTION *** NO LAG, NO SLOWDOWNS, JUST PURE 32-BIT POWER *** SHOUTOUTS TO ALL THE LEGENDARY GROUPS: RAZOR 1911, FAIRLIGHT, SKIDROW, AND THE REST! *** THE DEMOSCENE LIVES ON IN OUR HEARTS *** DON'T FORGET TO CHECK THE SETTINGS FOR FULLSCREEN MODE *** USE THE MOUSE TO CONTROL THE PADDLE WITH PIXEL-PERFECT PRECISION *** COLLECT THE LASER POWER-UP TO BLAST THROUGH THE BRICKS *** THE MULTIBALL WILL HELP YOU CLEAR THE SCREEN IN NO TIME *** BUT BEWARE OF THE SPEED-UP! *** YOUR REFLEXES WILL BE TESTED TO THE LIMIT *** ARE YOU READY FOR THE ULTIMATE CHALLENGE? *** LET'S GO! *** REMEMBER THE AMIGA 500, 1200, AND 4000? *** THE GLORY DAYS OF THE WORKBENCH AND DELUXE PAINT *** THIS GAME IS BUILT WITH PASSION FOR THE PIXELS *** EVERY BRICK YOU BREAK IS A NOD TO THE PAST *** CAN YOU FIND THE HIDDEN SECRETS? *** THE MUSIC WAS COMPOSED TO BRING BACK THAT MOD-TRACKER FEEL *** CRANK UP THE VOLUME AND LET THE BASS HIT *** WATCH YOUR LIVES, they ARE PRECIOUS *** EXTRA LIVES ARE RARE, so PLAY CAREFULLY *** THE PADDLE IS YOUR ONLY DEFENSE AGAINST THE COSMIC CHAOS *** MASTER THE ANGLES TO BECOME A TRUE MEGABALL PRO *** THANKS FOR PLAYING AND SUPPORTING INDIE RETRO PROJECTS *** SPREAD THE WORD AND CHALLENGE YOUR FRIENDS *** WHO WILL GET THE HIGHEST SCORE? *** THE LEADERBOARD AWAITS YOUR NAME *** KEEP ON GAMING! *** THE AMIGA 1200 BROUGHT us INTO THE 32-BIT ERA WITH STYLE *** LONG LIVE THE AMIGA! ***   ";
 
   const spawnPowerUp = (x: number, y: number) => {
     const powerupProb = 0.2 - Math.min(0.1, (level / 100) * 0.1);
@@ -1807,6 +1807,27 @@ export const Game: React.FC = () => {
               spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
               spawnPowerUp(brick.x + brick.width / 2, brick.y + brick.height / 2);
               audioService.playBreakSound();
+
+              // Explosion Powerup - Hits neighboring bricks
+              if (hasExplosion) {
+                bricksRef.current.forEach(otherBrick => {
+                  if (otherBrick.active && !otherBrick.indestructible) {
+                    const dx = otherBrick.x + otherBrick.width/2 - (brick.x + brick.width/2);
+                    const dy = otherBrick.y + otherBrick.height/2 - (brick.y + brick.height/2);
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (dist < 150) {
+                      // 60% chance to explode neighbor
+                      if (Math.random() > 0.4) {
+                        otherBrick.active = false;
+                        setScore(s => s + 10);
+                        spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, otherBrick.color);
+                        audioService.playBreakSound();
+                      }
+                    }
+                  }
+                });
+              }
 
               // TNT Explosion - BRUTAL VERSION
               if (brick.type === 'TNT') {
@@ -3441,13 +3462,23 @@ export const Game: React.FC = () => {
           ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-[98vw] h-[98vh] max-w-none max-h-none shadow-[0_0_100px_rgba(0,255,0,0.1)] border border-green-500/20'}
           [container-type:size] self-center transition-all duration-300`}
       >
-        {/* HUD with Glass Effect Overlay - Minimalist v3.0 */}
-        <div className={`absolute top-0 left-0 w-full h-[3.5cqw] px-[1.5cqw] flex justify-between items-center z-30 transition-all duration-700
-          bg-black/25 backdrop-blur-md border-b border-white/5 pointer-events-none
+        {/* HUD with Glass Effect Overlay - Stable v3.2.0 */}
+        <div className={`absolute top-0 left-0 w-full h-[4cqw] px-[1.5cqw] flex justify-between items-center z-30 transition-all duration-700
+          bg-black/40 backdrop-blur-md border-b border-white/5 pointer-events-none
           ${isCursorHidden ? 'cursor-none' : ''} 
           ${gameState === 'START' ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'}`}>
           
-          <div className="flex gap-[3cqw] h-full items-center">
+          <div className="flex gap-[2.5cqw] h-full items-center pointer-events-auto">
+            {/* High Score moved to top-left */}
+            <div className="flex flex-col">
+              <span className="text-[0.45cqw] uppercase tracking-[0.2em] font-bold text-yellow-500/60 font-mono leading-tight">High Score</span>
+              <span className="text-[1.3cqw] font-black text-yellow-400 group-hover:text-yellow-300 transition-colors cursor-default drop-shadow-[0_0_5px_rgba(234,179,8,0.3)]">
+                {highScore.toString().padStart(6, '0')}
+              </span>
+            </div>
+
+            <div className="h-[1.5cqw] w-[1px] bg-white/10" />
+
             <div className="flex flex-col">
               <span className="text-[0.5cqw] uppercase tracking-[0.3em] font-bold text-green-500/60 font-mono leading-tight">Score</span>
               <span className="text-[1.6cqw] font-black text-green-400 leading-none">{score.toString().padStart(6, '0')}</span>
@@ -3467,7 +3498,7 @@ export const Game: React.FC = () => {
             </div>
           </div>
 
-          {/* Tactical Display - Tactical Energy & Powerups */}
+          {/* Tactical Display - Tactical Energy & Powerups (Unified) */}
           <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
             <div className="flex flex-col min-w-[12cqw] gap-[0.1cqw]">
               <div className="flex justify-between items-center px-1">
@@ -3485,7 +3516,7 @@ export const Game: React.FC = () => {
             <div className="flex gap-[0.8cqw] items-center">
               {Array.from(activePowerUps.entries()).map(([type, time]) => {
                 // Determine base duration for circular progress
-                let maxDur = 30000; // POWERUP_DURATION default
+                let maxDur = 30000; 
                 if (type === PowerUpType.FAST_BALL || type === PowerUpType.SLOW_BALL) maxDur = 10000;
                 if (type === PowerUpType.EXTRA_LIFE) maxDur = 0;
                 
@@ -3545,87 +3576,6 @@ export const Game: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
-            <div className="flex flex-col min-w-[12cqw] gap-[0.1cqw]">
-              <div className="flex justify-between items-center px-1">
-                <span className="text-[0.6cqw] uppercase tracking-[0.2em] font-bold text-cyan-400/50 font-mono">Energy</span>
-                <span className="text-[0.8cqw] text-cyan-400 font-bold font-mono">{Math.floor(energy)}%</span>
-              </div>
-              <div className="h-[0.5cqw] bg-white/5 border border-white/10 rounded-full overflow-hidden relative">
-                <motion.div 
-                  className={`h-full transition-[width,background-color] duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'bg-cyan-600/40'}`} 
-                  animate={{ width: `${energy}%` }}
-                />
-              </div>
-            </div>
-            
-            <div className="flex gap-[0.8cqw] items-center">
-              {Array.from(activePowerUps.entries()).map(([type, time]) => {
-                // Radial timer calculation
-                // Durations matching logic in applyPowerUp
-                const maxDuration = type === PowerUpType.EXTRA_LIFE ? 0 : 
-                                    (type === PowerUpType.FAST_BALL || type === PowerUpType.SLOW_BALL) ? 10000 : 15000;
-                const progress = maxDuration > 0 ? (time / maxDuration) * 100 : 100;
-
-                return (
-                  <div 
-                    key={type}
-                    className="relative w-[2.2cqw] h-[2.2cqw] flex items-center justify-center bg-white/5 backdrop-blur-sm rounded-sm border border-white/10"
-                    title={`${type} - ${Math.ceil(time/1000)}s`}
-                  >
-                    {/* Radial Timer SVG */}
-                    {maxDuration > 0 && (
-                      <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none scale-[1.15]">
-                        <circle
-                          cx="50%"
-                          cy="50%"
-                          r="42%"
-                          fill="none"
-                          stroke="rgba(255,255,255,0.05)"
-                          strokeWidth="3"
-                        />
-                        <circle
-                          cx="50%"
-                          cy="50%"
-                          r="42%"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="3"
-                          strokeDasharray="100"
-                          strokeDashoffset={100 - progress}
-                          className={`transition-all duration-100 ${
-                            type === PowerUpType.LASER ? 'text-red-500' :
-                            type === PowerUpType.WIDE_PADDLE ? 'text-blue-500' :
-                            type === PowerUpType.EXTRA_LIFE ? 'text-red-500' :
-                            type === PowerUpType.SLOW_BALL ? 'text-cyan-500' :
-                            type === PowerUpType.FAST_BALL ? 'text-orange-500' :
-                            type === PowerUpType.GLUE ? 'text-yellow-500' :
-                            type === PowerUpType.FIREBALL ? 'text-red-600' :
-                            type === PowerUpType.FLOOR ? 'text-green-400' :
-                            'text-orange-400'
-                          }`}
-                          pathLength="100"
-                        />
-                      </svg>
-                    )}
-                    
-                    <div className={time < 3000 ? 'animate-pulse' : ''}>
-                      {type === PowerUpType.LASER && <Zap className="w-[1.1cqw] h-[1.1cqw] text-red-500" />}
-                      {type === PowerUpType.WIDE_PADDLE && <Shield className="w-[1.1cqw] h-[1.1cqw] text-blue-500" />}
-                      {type === PowerUpType.EXTRA_LIFE && <Heart className="w-[1.1cqw] h-[1.1cqw] text-red-500 fill-red-500" />}
-                      {type === PowerUpType.SLOW_BALL && <Gauge className="w-[1.1cqw] h-[1.1cqw] text-cyan-500" />}
-                      {type === PowerUpType.FAST_BALL && <Gauge className="w-[1.1cqw] h-[1.1cqw] text-orange-500" />}
-                      {type === PowerUpType.GLUE && <Zap className="w-[1.1cqw] h-[1.1cqw] text-yellow-500" />}
-                      {type === PowerUpType.FIREBALL && <Flame className="w-[1.1cqw] h-[1.1cqw] text-red-600" />}
-                      {type === PowerUpType.FLOOR && <Shield className="w-[1.1cqw] h-[1.1cqw] text-green-400" />}
-                      {type === PowerUpType.EXPLOSION && <Zap className="w-[1.1cqw] h-[1.1cqw] text-orange-400" />}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
           <div className="flex items-center gap-[1.5cqw] pointer-events-auto">
             <div className="flex flex-col items-center">
               <span className="text-[0.4cqw] uppercase text-white/40 leading-none mb-0.5 font-mono">Sector</span>
@@ -3639,14 +3589,17 @@ export const Game: React.FC = () => {
             <button 
               onClick={toggleMute}
               className="p-[0.2cqw] text-white/40 hover:text-white transition-colors"
+              title="Toggle Sound"
             >
-              {isMuted ? <VolumeX className="w-[1cqw] h-[1cqw]" /> : <Volume2 className="w-[1cqw] h-[1cqw]" />}
+              {isMuted ? <VolumeX className="w-[1.2cqw] h-[1.2cqw]" /> : <Volume2 className="w-[1.2cqw] h-[1.2cqw]" />}
             </button>
+
             <button 
               onClick={toggleFullscreen}
               className="p-[0.2cqw] text-white/40 hover:text-white transition-colors"
+              title="Toggle Fullscreen"
             >
-              {isFullscreen ? <Minimize className="w-[1cqw] h-[1cqw]" /> : <Maximize className="w-[1cqw] h-[1cqw]" />}
+              {isFullscreen ? <Minimize className="w-[1.2cqw] h-[1.2cqw]" /> : <Maximize className="w-[1.2cqw] h-[1.2cqw]" />}
             </button>
           </div>
         </div>
@@ -3731,7 +3684,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v3.1.0429.2035
+                      RELEASE v3.3.0429.2104
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
@@ -3836,8 +3789,9 @@ export const Game: React.FC = () => {
                 </div>
               </div>
               
-              <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-b-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center pointer-events-none">
+              <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-b-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center pointer-events-none shadow-[0_-10px_20px_rgba(0,255,0,0.1)]">
                 <RetroScroller text={scrollerText} />
+                <div className="absolute bottom-0 left-0 w-full h-[2px] bg-green-500/50 shadow-[0_0_10px_rgba(0,255,0,1)]" />
               </div>
             </motion.div>
           )}

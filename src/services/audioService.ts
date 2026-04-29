@@ -21,12 +21,22 @@ class AudioService {
         'Music3.mp3',
         'Music4.mp3',
         'Music5.mp3',
-        'Music6.mp3'
+        'Music6.mp3',
+        'Music7.mp3',
+        'Music8.mp3',
+        'Music9.mp3',
+        'Music10.mp3'
       ];
 
       playlistFiles.forEach((file, index) => {
         const audio = new Audio(LOCAL_DATA + encodeURIComponent(file));
         audio.volume = 0.6;
+        audio.addEventListener('timeupdate', () => {
+          // Crossfade: If we're within 3 seconds of the end, start prepping/playing next track
+          if (audio.duration && audio.currentTime > audio.duration - 3 && this.isPlaylistMode && !this.isMuted) {
+            this.handleCrossfade();
+          }
+        });
         audio.addEventListener('ended', () => this.handleTrackEnded());
         this.playlist.push(audio);
       });
@@ -48,8 +58,53 @@ class AudioService {
     }
   }
 
+  private isCrossfading: boolean = false;
+
+  private async handleCrossfade() {
+    if (this.isCrossfading) return;
+    this.isCrossfading = true;
+
+    const nextIndex = (this.currentPlaylistIndex + 1) % this.playlist.length;
+    const nextTrack = this.playlist[nextIndex];
+    
+    // Start fading out current
+    const currentTrack = this.playlist[this.currentPlaylistIndex];
+    const fadeInterval = setInterval(() => {
+      if (currentTrack.volume > 0.05) {
+        currentTrack.volume -= 0.05;
+      } else {
+        currentTrack.pause();
+        currentTrack.volume = 0.6;
+        clearInterval(fadeInterval);
+      }
+    }, 200);
+
+    // Start next track
+    this.currentPlaylistIndex = nextIndex;
+    this.currentMusic = nextTrack;
+    try {
+      nextTrack.currentTime = 0;
+      nextTrack.volume = 0;
+      await nextTrack.play();
+      
+      // Fade in next
+      const fadeInInterval = setInterval(() => {
+        if (nextTrack.volume < 0.6) {
+          nextTrack.volume += 0.05;
+        } else {
+          nextTrack.volume = 0.6;
+          clearInterval(fadeInInterval);
+          this.isCrossfading = false;
+        }
+      }, 200);
+    } catch (e) {
+      console.error("Crossfade playback failed:", e);
+      this.isCrossfading = false;
+    }
+  }
+
   private async handleTrackEnded() {
-    if (this.isPlaylistMode && !this.isMuted) {
+    if (this.isPlaylistMode && !this.isMuted && !this.isCrossfading) {
       this.currentPlaylistIndex = (this.currentPlaylistIndex + 1) % this.playlist.length;
       const nextTrack = this.playlist[this.currentPlaylistIndex];
       this.currentMusic = nextTrack;
