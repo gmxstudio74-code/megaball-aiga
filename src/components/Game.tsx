@@ -829,24 +829,24 @@ export const Game: React.FC = () => {
         
         if (variant === 0) {
           // Narrow side corridors for portals
-          objects.push({ id: gate1Id, type: 'WARP_GATE', x: 100, y: 550, radius: 35, targetId: gate2Id });
-          objects.push({ id: gate3Id, type: 'WARP_GATE', x: GAME_WIDTH - 100, y: 550, radius: 35, targetId: gate2Id });
+          objects.push({ id: gate1Id, type: 'WARP_GATE', x: 100, y: 600, radius: 35, targetId: gate2Id });
+          objects.push({ id: gate3Id, type: 'WARP_GATE', x: GAME_WIDTH - 100, y: 600, radius: 35, targetId: gate2Id });
           
           // Obstacles blocking direct path
-          objects.push({ id: `block-${currentLevel}-1`, type: 'GEAR', x: 250, y: 550, radius: 50 });
-          objects.push({ id: `block-${currentLevel}-2`, type: 'GEAR', x: GAME_WIDTH - 250, y: 550, radius: 50 });
+          objects.push({ id: `block-${currentLevel}-1`, type: 'GEAR', x: 250, y: 600, radius: 50 });
+          objects.push({ id: `block-${currentLevel}-2`, type: 'GEAR', x: GAME_WIDTH - 250, y: 600, radius: 50 });
         } else if (variant === 1) {
           // Hidden behind a crusher
-          objects.push({ id: gate1Id, type: 'WARP_GATE', x: GAME_WIDTH/2, y: 500, radius: 35, targetId: gate2Id });
+          objects.push({ id: gate1Id, type: 'WARP_GATE', x: GAME_WIDTH/2, y: 580, radius: 35, targetId: gate2Id });
           objects.push({ 
-            id: `guard-${currentLevel}`, type: 'CRUSHER', x: GAME_WIDTH/2, y: 450, radius: 35, 
+            id: `guard-${currentLevel}`, type: 'CRUSHER', x: GAME_WIDTH/2, y: 540, radius: 35, 
             width: 150, height: 40, state: 'RETRACTED' 
           });
         } else {
           // Far corners with wind resistance
-          objects.push({ id: gate1Id, type: 'WARP_GATE', x: 80, y: 400, radius: 35, targetId: gate2Id });
-          objects.push({ id: gate3Id, type: 'WARP_GATE', x: GAME_WIDTH - 80, y: 400, radius: 35, targetId: gate2Id });
-          objects.push({ id: `fan-${currentLevel}`, type: 'FAN', x: GAME_WIDTH/2, y: 550, radius: 80, strength: 0.3 });
+          objects.push({ id: gate1Id, type: 'WARP_GATE', x: 80, y: 550, radius: 35, targetId: gate2Id });
+          objects.push({ id: gate3Id, type: 'WARP_GATE', x: GAME_WIDTH - 80, y: 550, radius: 35, targetId: gate2Id });
+          objects.push({ id: `fan-${currentLevel}`, type: 'FAN', x: GAME_WIDTH/2, y: 600, radius: 80, strength: 0.3 });
         }
         
         // Exit (Inside cage)
@@ -1919,21 +1919,37 @@ export const Game: React.FC = () => {
           if (phase < 0.5) {
             obj.state = 'EXTENDED';
             // Animation for visual
-            obj.rotation = (phase * 2) * 40; // Extension height 0-40
+            obj.rotation = (phase * 2) * 50; // Increased extension 0-50
           } else {
             obj.state = 'RETRACTED';
-            obj.rotation = ((1 - phase) * 2) * 40;
+            obj.rotation = ((1 - phase) * 2) * 50;
           }
 
-          // AABB Collision for Crusher
+          // Box Collision for Crusher
           const crusherY = obj.y - (obj.rotation || 0);
+          const cX = obj.x - (obj.width! / 2);
+          const cY = crusherY;
+          const cW = obj.width!;
+          const cH = obj.height!;
+
           if (
-            ball.x + BALL_RADIUS > obj.x - (obj.width! / 2) &&
-            ball.x - BALL_RADIUS < obj.x + (obj.width! / 2) &&
-            ball.y + BALL_RADIUS > crusherY &&
-            ball.y - BALL_RADIUS < crusherY + obj.height!
+            ball.x + BALL_RADIUS > cX &&
+            ball.x - BALL_RADIUS < cX + cW &&
+            ball.y + BALL_RADIUS > cY &&
+            ball.y - BALL_RADIUS < cY + cH
           ) {
-            ball.dy = Math.abs(ball.dy); // Pop ball down
+            // Determine side of collision for proper bounce
+            const overlapX = Math.min(ball.x + BALL_RADIUS - cX, cX + cW - (ball.x - BALL_RADIUS));
+            const overlapY = Math.min(ball.y + BALL_RADIUS - cY, cY + cH - (ball.y - BALL_RADIUS));
+
+            if (overlapX < overlapY) {
+              ball.dx = ball.x < obj.x ? -Math.abs(ball.dx) : Math.abs(ball.dx);
+              ball.x += (ball.dx < 0 ? -1 : 1) * (overlapX + 2);
+            } else {
+              ball.dy = ball.y < cY + cH/2 ? -Math.abs(ball.dy) : Math.abs(ball.dy);
+              ball.y += (ball.dy < 0 ? -1 : 1) * (overlapY + 2);
+            }
+            
             audioService.playSfx('wall');
             setPaddleShake(2);
           }
@@ -1941,17 +1957,32 @@ export const Game: React.FC = () => {
 
         // Conveyor Logic
         if (obj.type === 'CONVEYOR') {
+          const cX = obj.x - (obj.width! / 2);
+          const cY = obj.y;
+          const cW = obj.width!;
+          const cH = obj.height!;
+
           if (
-            ball.x + BALL_RADIUS > obj.x - (obj.width! / 2) &&
-            ball.x - BALL_RADIUS < obj.x + (obj.width! / 2) &&
-            ball.y + BALL_RADIUS > obj.y &&
-            ball.y - BALL_RADIUS < obj.y + obj.height!
+            ball.x + BALL_RADIUS > cX &&
+            ball.x - BALL_RADIUS < cX + cW &&
+            ball.y + BALL_RADIUS > cY &&
+            ball.y - BALL_RADIUS < cY + cH
           ) {
-            const driftSpeed = 1.5;
+            const driftSpeed = 2.0;
             ball.dx += obj.direction === 'LEFT' ? -driftSpeed : driftSpeed;
-            // Friction/Impact
-            ball.dy = -ball.dy;
-            ball.y = obj.y - BALL_RADIUS; 
+            
+            // Standard AABB bounce
+            const overlapX = Math.min(ball.x + BALL_RADIUS - cX, cX + cW - (ball.x - BALL_RADIUS));
+            const overlapY = Math.min(ball.y + BALL_RADIUS - cY, cY + cH - (ball.y - BALL_RADIUS));
+
+            if (overlapX < overlapY) {
+              ball.dx = ball.x < obj.x ? -Math.abs(ball.dx) : Math.abs(ball.dx);
+              ball.x += (ball.dx < 0 ? -1 : 1) * (overlapX + 2);
+            } else {
+              ball.dy = ball.y < cY + cH/2 ? -Math.abs(ball.dy) : Math.abs(ball.dy);
+              ball.y += (ball.dy < 0 ? -1 : 1) * (overlapY + 2);
+            }
+            
             audioService.playSfx('wall');
           }
         }
@@ -2214,6 +2245,40 @@ export const Game: React.FC = () => {
           setBrickShake(2);
         }
       });
+
+      // Laser-obstacle collision (Bulletproof obstacles)
+      if (laser.active) {
+        physicalObjectsRef.current.forEach(obj => {
+          if (!laser.active) return;
+          
+          if (obj.type === 'GEAR' || obj.type === 'FAN' || obj.type === 'MAGNET' || obj.type === 'CRUSHER' || obj.type === 'CONVEYOR') {
+            let hit = false;
+            if (obj.width && obj.height) {
+              const objY = obj.type === 'CRUSHER' ? obj.y - (obj.rotation || 0) : obj.y;
+              if (
+                laser.x > obj.x - obj.width/2 &&
+                laser.x < obj.x + obj.width/2 &&
+                laser.y > obj.y &&
+                laser.y < obj.y + obj.height
+              ) {
+                hit = true;
+              }
+            } else {
+              const dx = laser.x - obj.x;
+              const dy = laser.y - obj.y;
+              if (Math.sqrt(dx*dx + dy*dy) < obj.radius) {
+                hit = true;
+              }
+            }
+            
+            if (hit) {
+              laser.active = false;
+              audioService.playSfx('wall');
+              spawnParticles(laser.x, laser.y, '#ffffff');
+            }
+          }
+        });
+      }
     });
 
     // Check for level complete
@@ -3490,7 +3555,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v2.2.0429.0609
+                      RELEASE v2.3.0429.0635
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
