@@ -1573,6 +1573,7 @@ export const Game: React.FC = () => {
                 brick.active = false;
                 setScore(s => s + 10);
                 spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
+                audioService.playBreakSound();
               }
             }
           }
@@ -1823,6 +1824,7 @@ export const Game: React.FC = () => {
                       spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, otherBrick.color);
                       // Extra particles for "brutality"
                       if (Math.random() > 0.5) spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, '#ffffff');
+                      audioService.playBreakSound(); // Added missing sound
                     }
                   }
                 });
@@ -3465,6 +3467,165 @@ export const Game: React.FC = () => {
             </div>
           </div>
 
+          {/* Tactical Display - Tactical Energy & Powerups */}
+          <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
+            <div className="flex flex-col min-w-[12cqw] gap-[0.1cqw]">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[0.6cqw] uppercase tracking-[0.2em] font-bold text-cyan-400/50 font-mono">Energy</span>
+                <span className="text-[0.8cqw] text-cyan-400 font-bold font-mono">{Math.floor(energy)}%</span>
+              </div>
+              <div className="h-[0.5cqw] bg-white/5 border border-white/10 rounded-full overflow-hidden relative">
+                <motion.div 
+                  className={`h-full transition-[width,background-color] duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'bg-cyan-600/40'}`} 
+                  animate={{ width: `${energy}%` }}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-[0.8cqw] items-center">
+              {Array.from(activePowerUps.entries()).map(([type, time]) => {
+                // Determine base duration for circular progress
+                let maxDur = 30000; // POWERUP_DURATION default
+                if (type === PowerUpType.FAST_BALL || type === PowerUpType.SLOW_BALL) maxDur = 10000;
+                if (type === PowerUpType.EXTRA_LIFE) maxDur = 0;
+                
+                const progress = maxDur > 0 ? (time / maxDur) * 100 : 100;
+
+                return (
+                  <div 
+                    key={type}
+                    className="relative w-[2.2cqw] h-[2.2cqw] flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-sm border border-white/10 overflow-hidden shadow-inner"
+                    title={`${type} - ${Math.ceil(time/1000)}s`}
+                  >
+                    {maxDur > 0 && (
+                      <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none p-[0.1cqw]">
+                        <circle
+                          cx="50%"
+                          cy="50%"
+                          r="38%"
+                          fill="none"
+                          stroke="rgba(255,255,255,0.05)"
+                          strokeWidth="2.5"
+                        />
+                        <circle
+                          cx="50%"
+                          cy="50%"
+                          r="38%"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeDasharray="100"
+                          strokeDashoffset={100 - progress}
+                          className={`transition-all duration-100 ${
+                            type === PowerUpType.LASER ? 'text-red-500' :
+                            type === PowerUpType.WIDE_PADDLE ? 'text-blue-500' :
+                            type === PowerUpType.GLUE ? 'text-yellow-500' :
+                            type === PowerUpType.FIREBALL ? 'text-red-600' :
+                            'text-green-500'
+                          }`}
+                          pathLength="100"
+                        />
+                      </svg>
+                    )}
+                    
+                    <div className={`${time < 3000 ? 'animate-pulse' : ''} relative z-10`}>
+                      {type === PowerUpType.LASER && <Zap className="w-[1cqw] h-[1cqw] text-red-500" />}
+                      {type === PowerUpType.WIDE_PADDLE && <Shield className="w-[1cqw] h-[1cqw] text-blue-500" />}
+                      {type === PowerUpType.EXTRA_LIFE && <Heart className="w-[1cqw] h-[1cqw] text-red-500 fill-red-500" />}
+                      {type === PowerUpType.SLOW_BALL && <Gauge className="w-[1cqw] h-[1cqw] text-cyan-500" />}
+                      {type === PowerUpType.FAST_BALL && <Gauge className="w-[1cqw] h-[1cqw] text-orange-500" />}
+                      {type === PowerUpType.GLUE && <Zap className="w-[1cqw] h-[1cqw] text-yellow-500" />}
+                      {type === PowerUpType.FIREBALL && <Flame className="w-[1cqw] h-[1cqw] text-red-600" />}
+                      {type === PowerUpType.FLOOR && <Shield className="w-[1cqw] h-[1cqw] text-green-400" />}
+                      {type === PowerUpType.EXPLOSION && <Zap className="w-[1cqw] h-[1cqw] text-orange-400" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
+            <div className="flex flex-col min-w-[12cqw] gap-[0.1cqw]">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[0.6cqw] uppercase tracking-[0.2em] font-bold text-cyan-400/50 font-mono">Energy</span>
+                <span className="text-[0.8cqw] text-cyan-400 font-bold font-mono">{Math.floor(energy)}%</span>
+              </div>
+              <div className="h-[0.5cqw] bg-white/5 border border-white/10 rounded-full overflow-hidden relative">
+                <motion.div 
+                  className={`h-full transition-[width,background-color] duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'bg-cyan-600/40'}`} 
+                  animate={{ width: `${energy}%` }}
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-[0.8cqw] items-center">
+              {Array.from(activePowerUps.entries()).map(([type, time]) => {
+                // Radial timer calculation
+                // Durations matching logic in applyPowerUp
+                const maxDuration = type === PowerUpType.EXTRA_LIFE ? 0 : 
+                                    (type === PowerUpType.FAST_BALL || type === PowerUpType.SLOW_BALL) ? 10000 : 15000;
+                const progress = maxDuration > 0 ? (time / maxDuration) * 100 : 100;
+
+                return (
+                  <div 
+                    key={type}
+                    className="relative w-[2.2cqw] h-[2.2cqw] flex items-center justify-center bg-white/5 backdrop-blur-sm rounded-sm border border-white/10"
+                    title={`${type} - ${Math.ceil(time/1000)}s`}
+                  >
+                    {/* Radial Timer SVG */}
+                    {maxDuration > 0 && (
+                      <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none scale-[1.15]">
+                        <circle
+                          cx="50%"
+                          cy="50%"
+                          r="42%"
+                          fill="none"
+                          stroke="rgba(255,255,255,0.05)"
+                          strokeWidth="3"
+                        />
+                        <circle
+                          cx="50%"
+                          cy="50%"
+                          r="42%"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="3"
+                          strokeDasharray="100"
+                          strokeDashoffset={100 - progress}
+                          className={`transition-all duration-100 ${
+                            type === PowerUpType.LASER ? 'text-red-500' :
+                            type === PowerUpType.WIDE_PADDLE ? 'text-blue-500' :
+                            type === PowerUpType.EXTRA_LIFE ? 'text-red-500' :
+                            type === PowerUpType.SLOW_BALL ? 'text-cyan-500' :
+                            type === PowerUpType.FAST_BALL ? 'text-orange-500' :
+                            type === PowerUpType.GLUE ? 'text-yellow-500' :
+                            type === PowerUpType.FIREBALL ? 'text-red-600' :
+                            type === PowerUpType.FLOOR ? 'text-green-400' :
+                            'text-orange-400'
+                          }`}
+                          pathLength="100"
+                        />
+                      </svg>
+                    )}
+                    
+                    <div className={time < 3000 ? 'animate-pulse' : ''}>
+                      {type === PowerUpType.LASER && <Zap className="w-[1.1cqw] h-[1.1cqw] text-red-500" />}
+                      {type === PowerUpType.WIDE_PADDLE && <Shield className="w-[1.1cqw] h-[1.1cqw] text-blue-500" />}
+                      {type === PowerUpType.EXTRA_LIFE && <Heart className="w-[1.1cqw] h-[1.1cqw] text-red-500 fill-red-500" />}
+                      {type === PowerUpType.SLOW_BALL && <Gauge className="w-[1.1cqw] h-[1.1cqw] text-cyan-500" />}
+                      {type === PowerUpType.FAST_BALL && <Gauge className="w-[1.1cqw] h-[1.1cqw] text-orange-500" />}
+                      {type === PowerUpType.GLUE && <Zap className="w-[1.1cqw] h-[1.1cqw] text-yellow-500" />}
+                      {type === PowerUpType.FIREBALL && <Flame className="w-[1.1cqw] h-[1.1cqw] text-red-600" />}
+                      {type === PowerUpType.FLOOR && <Shield className="w-[1.1cqw] h-[1.1cqw] text-green-400" />}
+                      {type === PowerUpType.EXPLOSION && <Zap className="w-[1.1cqw] h-[1.1cqw] text-orange-400" />}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="flex items-center gap-[1.5cqw] pointer-events-auto">
             <div className="flex flex-col items-center">
               <span className="text-[0.4cqw] uppercase text-white/40 leading-none mb-0.5 font-mono">Sector</span>
@@ -3555,7 +3716,7 @@ export const Game: React.FC = () => {
                 ))}
               </div>
 
-              <div className="flex-1 flex flex-col items-center justify-center gap-[2cqh] w-full max-w-[90cqw] z-10 pt-[5cqh] pb-[15cqh]">
+              <div className="flex-1 flex flex-col items-center justify-center gap-[2cqh] w-full max-w-[90cqw] z-30 pt-[5cqh] pb-[15cqh]">
                 <motion.div
                   animate={{
                     scale: [1, 1.03, 1],
@@ -3570,7 +3731,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v3.0.0429.1752
+                      RELEASE v3.1.0429.2035
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
@@ -3606,11 +3767,10 @@ export const Game: React.FC = () => {
                 <div className="flex flex-wrap justify-center gap-[2cqw]">
                   <button
                     onClick={toggleFullscreen}
-                    className="group relative flex items-center gap-[1.5cqw] px-[3cqw] py-[1.5cqw] bg-gray-800/80 hover:bg-gray-700 text-white font-black text-[1.5cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                    className="p-[1.5cqw] bg-white/5 hover:bg-white/10 text-white/50 hover:text-white rounded-full transition-all transform hover:scale-110 border border-white/10"
+                    title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
                   >
-                    {isFullscreen ? <Minimize className="w-[2cqw] h-[2cqw]" /> : <Maximize className="w-[2cqw] h-[2cqw]" />}
-                    {isFullscreen ? 'EXIT FULLSCREEN' : 'GO FULLSCREEN'}
-                    <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    {isFullscreen ? <Minimize className="w-[2.5cqw] h-[2.5cqw]" /> : <Maximize className="w-[2.5cqw] h-[2.5cqw]" />}
                   </button>
 
                   <button
@@ -3676,7 +3836,7 @@ export const Game: React.FC = () => {
                 </div>
               </div>
               
-              <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center">
+              <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-b-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center pointer-events-none">
                 <RetroScroller text={scrollerText} />
               </div>
             </motion.div>
