@@ -27,7 +27,8 @@ import {
   Star,
   Ball,
   PhysicalObject,
-  PhysicalObjectType
+  PhysicalObjectType,
+  SCROLLER_TEXT
 } from '../constants';
 import { useGameLoop } from '../hooks/useGameLoop';
 import { audioService } from '../services/audioService';
@@ -1274,8 +1275,7 @@ export const Game: React.FC = () => {
     };
   }, [gameState, level, isInfiniteMode]);
 
-  const scrollerText = "*** MEGABALL AiGA v3.4 RELEASED! *** NEW: COMPACT TACTICAL HUD DEPLOYED *** NUMERIC SHIELD COUNTER ENABLED *** START SCREEN HEADER UNIFIED *** EXPANDED 10-TRACK SOUNDTRACK WITH GAPLESS CROSSFADE MIXING *** PROMPTED BY GMX *** MUSIC PROMPTED BY GMX USING SUNO AI *** GREETINGS TO ALL RETRO GAMERS WORLDWIDE *** CRACKED BY NOBODY *** PLAY LOUD AND PROUD *** EXPERIENCE THE POWER OF THE 32-BIT AGA CHIPSET *** 256 COLORS OF PURE ARCADE ADRENALINE *** REMEMBER THE DAYS OF FLOPPY DISKS AND JOYSTICK WIGGLING? *** THIS IS A LOVE LETTER TO THE 32-BIT GENERATION *** SPECIAL THANKS TO THE DEMOSCENE FOR THE ENDLESS INSPIRATION *** KEEP THE RETRO SPIRIT ALIVE *** DON'T FORGET TO GRAB THE POWER-UPS *** WATCH OUT FOR THE FIREBALL! *** CAN YOU CLEAR ALL 100 SECTORS? *** THE GALAXY IS COUNTING ON YOU PILOT *** NO QUARTERS REQUIRED *** JUST PURE SKILL AND REFLEXES *** STAY TUNED FOR MORE UPDATES *** OVER AND OUT! *** DID YOU KNOW? THE ORIGINAL MEGABALL WAS A STAPLE OF THE AMIGA SHAREWARE SCENE! *** WE ARE KEEPING THE TRADITION ALIVE WITH THIS MODERN TRIBUTE *** FEEL THE SMOOTH 60FPS ACTION *** NO LAG, NO SLOWDOWNS, JUST PURE 32-BIT POWER *** SHOUTOUTS TO ALL THE LEGENDARY GROUPS: RAZOR 1911, FAIRLIGHT, SKIDROW, AND THE REST! *** THE DEMOSCENE LIVES ON IN OUR HEARTS *** DON'T FORGET TO CHECK THE SETTINGS FOR FULLSCREEN MODE *** USE THE MOUSE TO CONTROL THE PADDLE WITH PIXEL-PERFECT PRECISION *** COLLECT THE LASER POWER-UP TO BLAST THROUGH THE BRICKS *** THE MULTIBALL WILL HELP YOU CLEAR THE SCREEN IN NO TIME *** BUT BEWARE OF THE SPEED-UP! *** YOUR REFLEXES WILL BE TESTED TO THE LIMIT *** ARE YOU READY FOR THE ULTIMATE CHALLENGE? *** LET'S GO! *** REMEMBER THE AMIGA 500, 1200, AND 4000? *** THE GLORY DAYS OF THE WORKBENCH AND DELUXE PAINT *** THIS GAME IS BUILT WITH PASSION FOR THE PIXELS *** EVERY BRICK YOU BREAK IS A NOD TO THE PAST *** CAN YOU FIND THE HIDDEN SECRETS? *** THE MUSIC WAS COMPOSED TO BRING BACK THAT MOD-TRACKER FEEL *** CRANK UP THE VOLUME AND LET THE BASS HIT *** WATCH YOUR LIVES, they ARE PRECIOUS *** EXTRA LIVES ARE RARE, so PLAY CAREFULLY *** THE PADDLE IS YOUR ONLY DEFENSE AGAINST THE COSMIC CHAOS *** MASTER THE ANGLES TO BECOME A TRUE MEGABALL PRO *** THANKS FOR PLAYING AND SUPPORTING INDIE RETRO PROJECTS *** SPREAD THE WORD AND CHALLENGE YOUR FRIENDS *** WHO WILL GET THE HIGHEST SCORE? *** THE LEADERBOARD AWAITS YOUR NAME *** KEEP ON GAMING! *** THE AMIGA 1200 BROUGHT us INTO THE 32-BIT ERA WITH STYLE *** LONG LIVE THE AMIGA! ***   ";
-
+  // Scroller text moved to constants.ts for optimization
   const spawnPowerUp = (x: number, y: number) => {
     const powerupProb = 0.2 - Math.min(0.1, (level / 100) * 0.1);
     if (Math.random() > powerupProb) return; 
@@ -2660,15 +2660,9 @@ export const Game: React.FC = () => {
     particlesRef.current.forEach(p => {
       ctx.globalAlpha = p.life;
       ctx.fillStyle = p.color;
-      if (level === 3) {
-        ctx.shadowBlur = 0;
-      } else {
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = p.color;
-      }
+      // Optimization: No shadows for small particles to save substantial CPU/GPU time
       ctx.fillRect(p.x, p.y, p.size, p.size);
     });
-    ctx.shadowBlur = 0;
     ctx.globalAlpha = 1.0;
 
     // Screen Shake END
@@ -3604,13 +3598,13 @@ export const Game: React.FC = () => {
           </div>
         </div>
 
-        {/* Game Area - Guaranteed Full Size v2.9 */}
-        <div className="absolute inset-0 bg-black flex items-center justify-center z-10 overflow-hidden">
+        {/* Game Area - Aspect Ratio Preserved v3.5 */}
+        <div className="absolute inset-0 bg-[#050505] flex items-center justify-center z-10 overflow-hidden">
           <canvas
             ref={canvasRef}
             width={GAME_WIDTH}
             height={GAME_HEIGHT}
-            className="w-full h-full object-fill touch-none pointer-events-auto"
+            className="max-w-full max-h-full object-contain touch-none pointer-events-auto shadow-[0_0_50px_rgba(0,0,0,0.5)]"
           />
         </div>
 
@@ -3813,7 +3807,7 @@ export const Game: React.FC = () => {
               </div>
               
               <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-b-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center pointer-events-none shadow-[0_-10px_20px_rgba(0,255,0,0.1)]">
-                <RetroScroller text={scrollerText} />
+                <RetroScroller text={SCROLLER_TEXT} />
                 <div className="absolute bottom-0 left-0 w-full h-[2px] bg-green-500/50 shadow-[0_0_10px_rgba(0,255,0,1)]" />
               </div>
             </motion.div>

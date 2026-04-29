@@ -1,41 +1,20 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
 
-export const GAME_WIDTH = 1000;
-export const GAME_HEIGHT = 700;
+export const GAME_WIDTH = 1200;
+export const GAME_HEIGHT = 800;
 
-export const PADDLE_WIDTH = 120;
+export const PADDLE_WIDTH = 150;
 export const PADDLE_HEIGHT = 20;
-export const PADDLE_SPEED = 20;
-export const MOUSE_SENSITIVITY = 2.0;
+export const PADDLE_SPEED = 12;
+export const MOUSE_SENSITIVITY = 1.0;
 
 export const BALL_RADIUS = 10;
-export const INITIAL_BALL_SPEED = 6;
+export const INITIAL_BALL_SPEED = 8;
 
-export const BRICK_ROWS = 20;
-export const BRICK_COLS = 20;
-export const BRICK_PADDING = 4;
-export const BRICK_OFFSET_TOP = 80;
-export const BRICK_OFFSET_LEFT = 40;
-
-export const COLORS = {
-  background: '#050505',
-  grid: '#1a1a1a',
-  paddle: '#00ff00',
-  ball: '#ffffff',
-  bricks: [
-    '#ff00ff', // Magenta
-    '#00ffff', // Cyan
-    '#ffff00', // Yellow
-    '#ff0000', // Red
-    '#0000ff', // Blue
-    '#ff8800', // Orange
-    '#8800ff', // Purple
-    '#00ff88', // Spring Green
-  ]
-};
+export const BRICK_ROWS = 10;
+export const BRICK_COLS = 15;
+export const BRICK_PADDING = 5;
+export const BRICK_OFFSET_TOP = 100;
+export const BRICK_OFFSET_LEFT = 50;
 
 export enum PowerUpType {
   WIDE_PADDLE = 'WIDE_PADDLE',
@@ -50,16 +29,8 @@ export enum PowerUpType {
   FLOOR = 'FLOOR',
   EXPLOSION = 'EXPLOSION',
   BLACK_HOLE = 'BLACK_HOLE',
-  GHOST_PADDLE = 'GHOST_PADDLE',
+  GHOST_PADDLE = 'GHOST_PADDLE'
 }
-
-export const POWERUP_WIDTH = 40;
-export const POWERUP_HEIGHT = 20;
-export const POWERUP_SPEED = 2;
-
-export const LASER_WIDTH = 4;
-export const LASER_HEIGHT = 15;
-export const LASER_SPEED = 7;
 
 export interface PowerUp {
   x: number;
@@ -75,14 +46,22 @@ export interface Laser {
   active: boolean;
 }
 
+export const POWERUP_WIDTH = 30;
+export const POWERUP_HEIGHT = 30;
+export const POWERUP_SPEED = 4;
+
+export const LASER_WIDTH = 4;
+export const LASER_HEIGHT = 15;
+export const LASER_SPEED = 10;
+
 export interface Particle {
   x: number;
   y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
   size: number;
+  color: string;
+  life: number;
+  dx: number;
+  dy: number;
 }
 
 export interface Star {
@@ -98,48 +77,48 @@ export interface Ball {
   dx: number;
   dy: number;
   trail: { x: number; y: number }[];
-  isStuck?: boolean;
   isFireball?: boolean;
   isBlackHole?: boolean;
-  isPiercing?: boolean;
+  isStuck?: boolean;
   stuckOffset?: number;
-  spin?: number; // -1 to 1
-  consecutiveWallHits?: number;
+  isPiercing?: boolean;
+  spin?: number;
   lastInteractionFrame?: number;
-}
-
-export interface Portal {
-  x: number;
-  y: number;
-  id: string;
-  targetId: string;
-  active: boolean;
-  color: string;
+  consecutiveWallHits?: number;
 }
 
 export type PhysicalObjectType = 'GEAR' | 'FAN' | 'MAGNET' | 'WARP_GATE' | 'CRUSHER' | 'CONVEYOR';
 
 export interface PhysicalObject {
   id: string;
+  type: PhysicalObjectType;
   x: number;
   y: number;
-  type: PhysicalObjectType;
   radius: number;
   width?: number;
   height?: number;
   rotation?: number;
+  direction?: 'LEFT' | 'RIGHT';
+  targetId?: string;
   strength?: number;
-  targetId?: string; // For Warp Gates
-  state?: 'EXTENDED' | 'RETRACTED' | 'MOVING'; // For Crushers
+  state?: any;
   lastMoveTime?: number;
-  direction?: 'LEFT' | 'RIGHT'; // For Conveyors
 }
 
-declare global {
-  interface Window {
-    aistudio: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    };
-  }
-}
+export const COLORS = {
+  background: '#050505',
+  grid: '#111111',
+  paddle: '#ffffff',
+  bricks: [
+    '#ef4444', // red-500
+    '#22c55e', // green-500
+    '#3b82f6', // blue-500
+    '#eab308', // yellow-500
+    '#a855f7', // purple-500
+    '#06b6d4', // cyan-500
+    '#f97316', // orange-500
+    '#ffffff'  // white
+  ]
+};
+
+export const SCROLLER_TEXT = "*** MEGABALL AiGA v3.4 RELEASED! *** NEW: COMPACT TACTICAL HUD DEPLOYED *** NUMERIC SHIELD COUNTER ENABLED *** START SCREEN HEADER UNIFIED *** EXPANDED 10-TRACK SOUNDTRACK WITH GAPLESS CROSSFADE MIXING *** PROMPTED BY GMX *** MUSIC PROMPTED BY GMX USING SUNO AI *** GREETINGS TO ALL RETRO GAMERS WORLDWIDE *** CRACKED BY NOBODY *** PLAY LOUD AND PROUD *** EXPERIENCE THE POWER OF THE 32-BIT AGA CHIPSET *** 256 COLORS OF PURE ARCADE ADRENALINE *** REMEMBER THE DAYS OF FLOPPY DISKS AND JOYSTICK WIGGLING? *** THIS IS A LOVE LETTER TO THE 32-BIT GENERATION *** SPECIAL THANKS TO THE DEMOSCENE FOR THE ENDLESS INSPIRATION *** KEEP THE RETRO SPIRIT ALIVE *** DON'T FORGET TO GRAB THE POWER-UPS *** WATCH OUT FOR THE FIREBALL! *** CAN YOU CLEAR ALL 100 SECTORS? *** THE GALAXY IS COUNTING ON YOU PILOT *** NO QUARTERS REQUIRED *** JUST PURE SKILL AND REFLEXES *** STAY TUNED FOR MORE UPDATES *** OVER AND OUT! *** DID YOU KNOW? THE ORIGINAL MEGABALL WAS A STAPLE OF THE AMIGA SHAREWARE SCENE! *** WE ARE KEEPING THE TRADITION ALIVE WITH THIS MODERN TRIBUTE *** FEEL THE SMOOTH 60FPS ACTION *** NO LAG, NO SLOWDOWNS, JUST PURE 32-BIT POWER *** SHOUTOUTS TO ALL THE LEGENDARY GROUPS: RAZOR 1911, FAIRLIGHT, SKIDROW, AND THE REST! *** THE DEMOSCENE LIVES ON IN OUR HEARTS *** DON'T FORGET TO CHECK THE SETTINGS FOR FULLSCREEN MODE *** USE THE MOUSE TO CONTROL THE PADDLE WITH PIXEL-PERFECT PRECISION *** COLLECT THE LASER POWER-UP TO BLAST THROUGH THE BRICKS *** THE MULTIBALL WILL HELP YOU CLEAR THE SCREEN IN NO TIME *** BUT BEWARE OF THE SPEED-UP! *** YOUR REFLEXES WILL BE TESTED TO THE LIMIT *** ARE YOU READY FOR THE ULTIMATE CHALLENGE? *** LET'S GO! *** REMEMBER THE AMIGA 500, 1200, AND 4000? *** THE GLORY DAYS OF THE WORKBENCH AND DELUXE PAINT *** THIS GAME IS BUILT WITH PASSION FOR THE PIXELS *** EVERY BRICK YOU BREAK IS A NOD TO THE PAST *** CAN YOU FIND THE HIDDEN SECRETS? *** THE MUSIC WAS COMPOSED TO BRING BACK THAT MOD-TRACKER FEEL *** CRANK UP THE VOLUME AND LET THE BASS HIT *** WATCH YOUR LIVES, they ARE PRECIOUS *** EXTRA LIVES ARE RARE, so PLAY CAREFULLY *** THE PADDLE IS YOUR ONLY DEFENSE AGAINST THE COSMIC CHAOS *** MASTER THE ANGLES TO BECOME A TRUE MEGABALL PRO *** THANKS FOR PLAYING AND SUPPORTING INDIE RETRO PROJECTS *** SPREAD THE WORD AND CHALLENGE YOUR FRIENDS *** WHO WILL GET THE HIGHEST SCORE? *** THE LEADERBOARD AWAITS YOUR NAME *** KEEP ON GAMING! *** THE AMIGA 1200 BROUGHT us INTO THE 32-BIT ERA WITH STYLE *** LONG LIVE THE AMIGA! ***   ";
