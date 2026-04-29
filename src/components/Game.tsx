@@ -41,11 +41,16 @@ import {
   Volume2, 
   VolumeX, 
   Maximize, 
+  Minimize,
   RotateCcw, 
   Trophy,
   User,
   Send,
-  List
+  List,
+  Flame,
+  Ghost,
+  Target,
+  StickyNote
 } from 'lucide-react';
 import { db, auth } from '../firebase';
 import { 
@@ -190,6 +195,7 @@ export const Game: React.FC = () => {
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
+  const [isSafari, setIsSafari] = useState(false);
   const [showOrientationPrompt, setShowOrientationPrompt] = useState(false);
 
   useEffect(() => {
@@ -197,8 +203,14 @@ export const Game: React.FC = () => {
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
       const mobile = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
       const ios = /iphone|ipad|ipod/.test(userAgent.toLowerCase());
-      setIsMobile(mobile);
+      
+      // Additional check for iPads (Desktop Safari on MacIntel with touch points)
+      const isActuallyMobile = mobile || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+      
+      setIsMobile(isActuallyMobile);
       setIsIOS(ios);
+      setIsSafari(isSafari);
       
       if (mobile && window.innerHeight > window.innerWidth) {
         setShowOrientationPrompt(true);
@@ -926,9 +938,9 @@ export const Game: React.FC = () => {
   const startGame = (infinite = isInfiniteMode) => {
     console.log("Starting game...");
     
-    // Auto-fullscreen on mobile
-    if (isMobile && !isFullscreen) {
-      toggleFullscreen();
+    // Attempt pointer lock immediately on start if in fullscreen to avoid late banner jump
+    if (isFullscreen && containerRef.current) {
+      containerRef.current.requestPointerLock?.();
     }
     
     audioService.warmUpTTS();
@@ -3420,111 +3432,73 @@ export const Game: React.FC = () => {
     <div 
       ref={containerRef}
       className={`fixed inset-0 flex flex-col items-center justify-center bg-[#050505] text-white font-mono overflow-hidden select-none ${isCursorHidden ? 'cursor-none' : ''}`}
-      style={{ height: '100dvh', width: '100dvw' }}
+      style={{ height: '100vh', width: '100vw' }}
     >
       <div 
-        className={`relative flex flex-col bg-black border-4 border-green-500 shadow-[0_0_60px_rgba(0,255,0,0.2)] rounded-lg overflow-hidden
-          ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-[95dvw] h-[95dvh] max-w-[1400px] max-h-[90dvh] aspect-[10/7]'}
-          [container-type:size] self-center transition-all duration-500`}
+        className={`relative flex flex-col bg-black overflow-hidden
+          ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-[98vw] h-[98vh] max-w-none max-h-none shadow-[0_0_100px_rgba(0,255,0,0.1)] border border-green-500/20'}
+          [container-type:size] self-center transition-all duration-300`}
       >
-        {/* HUD with Copper Effect */}
-        <div className={`relative w-full h-[8cqw] px-[1.5cqw] flex justify-between items-center bg-black z-10 border-b-2 border-green-500/50 shrink-0 overflow-hidden ${isCursorHidden ? 'cursor-none' : ''} opacity-100 transition-opacity duration-700`}>
-          <div className="absolute inset-0 bg-gradient-to-b from-green-900/20 via-transparent to-green-900/20 pointer-events-none" />
-          <div className="flex gap-[4cqw] relative z-10 h-full items-center">
+        {/* HUD with Glass Effect Overlay - Minimalist v3.0 */}
+        <div className={`absolute top-0 left-0 w-full h-[3.5cqw] px-[1.5cqw] flex justify-between items-center z-30 transition-all duration-700
+          bg-black/25 backdrop-blur-md border-b border-white/5 pointer-events-none
+          ${isCursorHidden ? 'cursor-none' : ''} 
+          ${gameState === 'START' ? 'opacity-0 -translate-y-full' : 'opacity-100 translate-y-0'}`}>
+          
+          <div className="flex gap-[3cqw] h-full items-center">
             <div className="flex flex-col">
-              <span className="text-[1cqw] uppercase tracking-widest text-green-500/70">Score</span>
-              <span className="text-[2.5cqw] font-bold text-green-400 leading-none">{score.toString().padStart(6, '0')}</span>
+              <span className="text-[0.5cqw] uppercase tracking-[0.3em] font-bold text-green-500/60 font-mono leading-tight">Score</span>
+              <span className="text-[1.6cqw] font-black text-green-400 leading-none">{score.toString().padStart(6, '0')}</span>
             </div>
+            
             <div className="flex flex-col">
-              <span className="text-[1cqw] uppercase tracking-widest text-green-500/70">Lives</span>
-              <div className="flex gap-[0.5cqw] items-center h-[2.5cqw]">
-                {Array.from({ length: 10 }).map((_, i) => (
+              <span className="text-[0.5cqw] uppercase tracking-[0.3em] font-bold text-red-500/60 font-mono leading-tight">Shields</span>
+              <div className="flex gap-[0.3cqw] mt-[0.1cqw]">
+                {Array.from({ length: lives }).map((_, i) => (
                   <Heart 
                     key={i} 
                     size={16}
-                    className={`w-[1.8cqw] h-[1.8cqw] transition-colors duration-300 ${i < lives ? 'text-red-500 fill-red-500 drop-shadow-[0_0_3px_rgba(255,0,0,0.8)]' : 'text-gray-800'}`}
+                    className="w-[1cqw] h-[1cqw] text-red-500 fill-red-500"
                   />
                 ))}
               </div>
             </div>
-            <div className="flex flex-col min-w-[20cqw] gap-[0.2cqw]">
-              <div className="flex justify-between items-center px-1">
-                <span className="text-[1cqw] uppercase tracking-widest text-[#00ff41] font-bold">Tactical Energy</span>
-                <span className="text-[1.2cqw] text-[#00ff41] font-black font-mono">⚡ {Math.floor(energy)}%</span>
-              </div>
-              <div className="h-[2.5cqw] flex items-center gap-[1cqw]">
-                <div className="flex-1 bg-black border-2 border-[#00ff41]/20 h-[1.5cqw] rounded-sm overflow-hidden relative">
-                  <motion.div 
-                    className={`h-full transition-[width,background-color] duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.5)]' : 'bg-[#00ff41]/40'}`} 
-                    animate={{ width: `${energy}%` }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-transparent pointer-events-none" />
-                </div>
-                <div className="flex gap-[0.5cqw]">
-                  <div className={`w-[2.4cqw] h-[2.4cqw] flex items-center justify-center border-2 rounded transition-all ${energy >= 30 ? 'border-purple-500 bg-purple-500/20 text-purple-400 animate-pulse' : 'border-gray-800 text-gray-800'}`} title="[E] Force Push">
-                    <span className="text-[1.4cqw] font-black">E</span>
-                  </div>
-                  <div className={`w-[2.4cqw] h-[2.4cqw] flex items-center justify-center border-2 rounded transition-all ${energy >= 50 ? 'border-cyan-500 bg-cyan-500/20 text-cyan-400 animate-pulse' : 'border-gray-800 text-gray-800'}`} title="[T] Time Slow">
-                    <span className="text-[1.4cqw] font-black">T</span>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
-          
-          <div className="flex items-center gap-[2cqw]">
-            <div className="flex gap-[1cqw]">
-              {Array.from(activePowerUps.entries()).map(([type, time]) => (
-                <div 
-                  key={type} 
-                  className={`p-[0.5cqw] bg-green-500/20 rounded border border-green-500/50 transition-opacity ${time < FLASH_THRESHOLD ? 'animate-pulse opacity-50' : ''}`}
-                >
-                  {type === PowerUpType.LASER && <Zap className="w-[1.5cqw] h-[1.5cqw] text-red-500" />}
-                  {type === PowerUpType.WIDE_PADDLE && <Shield className="w-[1.5cqw] h-[1.5cqw] text-blue-500" />}
-                  {type === PowerUpType.EXTRA_LIFE && <Heart className="w-[1.5cqw] h-[1.5cqw] text-red-500 fill-red-500 animate-pulse" />}
-                  {type === PowerUpType.SLOW_BALL && <Gauge className="w-[1.5cqw] h-[1.5cqw] text-cyan-500" />}
-                  {type === PowerUpType.FAST_BALL && <Gauge className="w-[1.5cqw] h-[1.5cqw] text-orange-500" />}
-                  {type === PowerUpType.GLUE && <Zap className="w-[1.5cqw] h-[1.5cqw] text-yellow-500" />}
-                  {type === PowerUpType.FIREBALL && <Zap className="w-[1.5cqw] h-[1.5cqw] text-red-600" />}
-                  {type === PowerUpType.FLOOR && <Shield className="w-[1.5cqw] h-[1.5cqw] text-green-400" />}
-                  {type === PowerUpType.EXPLOSION && <Zap className="w-[1.5cqw] h-[1.5cqw] text-orange-400" />}
-                </div>
-              ))}
+
+          <div className="flex items-center gap-[1.5cqw] pointer-events-auto">
+            <div className="flex flex-col items-center">
+              <span className="text-[0.4cqw] uppercase text-white/40 leading-none mb-0.5 font-mono">Sector</span>
+              <div className="text-[1.3cqw] font-black text-green-400 italic">
+                {level}
+              </div>
             </div>
+            
+            <div className="h-[1.5cqw] w-[1px] bg-white/10" />
+
             <button 
               onClick={toggleMute}
-              className={`p-[1cqw] hover:bg-green-500/20 rounded-full transition-colors ${isCursorHidden ? 'cursor-none' : ''}`}
+              className="p-[0.2cqw] text-white/40 hover:text-white transition-colors"
             >
-              {isMuted ? <VolumeX className="w-[2cqw] h-[2cqw]" /> : <Volume2 className="w-[2cqw] h-[2cqw]" />}
+              {isMuted ? <VolumeX className="w-[1cqw] h-[1cqw]" /> : <Volume2 className="w-[1cqw] h-[1cqw]" />}
             </button>
             <button 
               onClick={toggleFullscreen}
-              className={`p-[1cqw] hover:bg-green-500/20 rounded-full transition-colors text-green-500 ${isCursorHidden ? 'cursor-none' : ''}`}
-              title="Toggle Fullscreen"
+              className="p-[0.2cqw] text-white/40 hover:text-white transition-colors"
             >
-              <Maximize className="w-[2cqw] h-[2cqw]" />
+              {isFullscreen ? <Minimize className="w-[1cqw] h-[1cqw]" /> : <Maximize className="w-[1cqw] h-[1cqw]" />}
             </button>
-            <div className="flex items-center gap-[2cqw]">
-              <div className="flex flex-col items-center">
-                <span className="text-[0.8cqw] uppercase text-green-500/50 leading-none mb-1">Bricks</span>
-                <div className="text-[1.5cqw] font-bold text-cyan-400 border border-cyan-500/30 px-[1cqw] py-[0.2cqw] rounded bg-cyan-500/5 min-w-[5cqw] text-center">
-                  {bricksRef.current.filter(b => b.active && !b.indestructible).length}
-                </div>
-              </div>
-              <div className="text-[1.5cqw] font-bold text-green-500 border border-green-500 px-[1.5cqw] py-[0.5cqw] rounded">
-                LEVEL {level}
-              </div>
-            </div>
           </div>
         </div>
 
-        <div className="relative flex-1 bg-black overflow-hidden">
+        {/* Game Area - Guaranteed Full Size v2.9 */}
+        <div className="absolute inset-0 bg-black flex items-center justify-center z-10 overflow-hidden">
           <canvas
             ref={canvasRef}
             width={GAME_WIDTH}
             height={GAME_HEIGHT}
-            className="w-full h-full object-contain touch-none"
+            className="w-full h-full object-fill touch-none pointer-events-auto"
           />
+        </div>
 
         {/* Overlays */}
         <AnimatePresence>
@@ -3596,7 +3570,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v2.6.0429.1321
+                      RELEASE v3.0.0429.1752
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
@@ -3630,16 +3604,15 @@ export const Game: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-wrap justify-center gap-[2cqw]">
-                  {isMobile && !isFullscreen && (
-                    <button
-                      onClick={toggleFullscreen}
-                      className="group relative flex items-center gap-[1.5cqw] px-[4cqw] py-[1.5cqw] bg-yellow-600 hover:bg-yellow-500 text-black font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(234,179,8,0.4)]"
-                    >
-                      <Maximize className="w-[2.5cqw] h-[2.5cqw]" />
-                      FULLSCREEN LANDSCAPE
-                      <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                  )}
+                  <button
+                    onClick={toggleFullscreen}
+                    className="group relative flex items-center gap-[1.5cqw] px-[3cqw] py-[1.5cqw] bg-gray-800/80 hover:bg-gray-700 text-white font-black text-[1.5cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                  >
+                    {isFullscreen ? <Minimize className="w-[2cqw] h-[2cqw]" /> : <Maximize className="w-[2cqw] h-[2cqw]" />}
+                    {isFullscreen ? 'EXIT FULLSCREEN' : 'GO FULLSCREEN'}
+                    <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  </button>
+
                   <button
                     onClick={() => startGame(false)}
                     className="group relative flex items-center gap-[1.5cqw] px-[5cqw] py-[1.5cqw] bg-green-600 hover:bg-green-500 text-black font-black text-[2cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(0,255,0,0.4)]"
@@ -3897,9 +3870,8 @@ export const Game: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
-    </div>
 
-      <div className="mt-8 text-[10px] text-green-500/30 uppercase tracking-[0.3em] flex gap-4">
+      <div className="mt-8 text-[10px] text-green-500/30 uppercase tracking-[0.3em] flex gap-4 pointer-events-none">
         <span>1991-2026</span>
         <span>•</span>
         <span>AGA CHIPSET ENABLED</span>
