@@ -3702,23 +3702,26 @@ export const Game: React.FC = () => {
                   <h1 className="text-[min(10cqw,12cqh)] font-black italic tracking-tighter text-white mb-[0.2cqw] drop-shadow-[0_0_30px_rgba(0,255,0,1)] leading-none">
                     MEGABALL <span className="text-red-500">Ai</span><span className="text-green-500">GA</span>
                   </h1>
-                  <div className="flex flex-col items-center">
-                    <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
-                    <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v3.4.0429.2110
-                    </div>
-                  </div>
-                  <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
-                  {showOrientationPrompt && (
-                    <motion.div 
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="mt-[2cqw] px-[2cqw] py-[1cqw] bg-red-500/20 border border-red-500/40 text-red-400 text-[1.2cqw] font-bold uppercase tracking-[0.2em] rounded"
-                    >
-                      ⚠️ Please rotate to LANDSCAPE for best experience
-                    </motion.div>
-                  )}
                 </motion.div>
+
+                <div className="text-center flex flex-col items-center">
+                  <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
+                  <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
+                    RELEASE v3.4.0429.2110
+                  </div>
+                  <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest mt-[1.5cqh]">Click to activate sound & start</p>
+                </div>
+
+                {showOrientationPrompt && (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-[2cqw] px-[2cqw] py-[1cqw] bg-red-500/20 border border-red-500/40 text-red-400 text-[1.2cqw] font-bold uppercase tracking-[0.2em] rounded"
+                  >
+                    ⚠️ Please rotate to LANDSCAPE for best experience
+                  </motion.div>
+                )}
+              </div>
 
                 <div className="flex flex-col items-center gap-[1cqh]">
                   <label htmlFor="level-select" className="text-[1.2cqw] text-green-500/60 uppercase tracking-widest">Select Starting Sector</label>
@@ -3806,7 +3809,6 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <span>ESC Key</span>
                     <span className="text-green-500/70">Exit Menu</span>
-                  </div>
                 </div>
               </div>
               
