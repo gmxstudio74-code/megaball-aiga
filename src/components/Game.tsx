@@ -1274,7 +1274,7 @@ export const Game: React.FC = () => {
     };
   }, [gameState, level, isInfiniteMode]);
 
-  const scrollerText = "*** MEGABALL AiGA v3.3 RELEASED! *** NEW: EXPANDED 10-TRACK SOUNDTRACK WITH GAPLESS CROSSFADE MIXING *** HUD ENHANCED: HIGH SCORE MOVED TO TOP-LEFT *** FULLSCREEN AND SOUND CONTROLS RESTORED TO TOP-RIGHT *** PROMPTED BY GMX *** MUSIC PROMPTED BY GMX USING SUNO AI *** GREETINGS TO ALL RETRO GAMERS WORLDWIDE *** CRACKED BY NOBODY *** PLAY LOUD AND PROUD *** EXPERIENCE THE POWER OF THE 32-BIT AGA CHIPSET *** 256 COLORS OF PURE ARCADE ADRENALINE *** REMEMBER THE DAYS OF FLOPPY DISKS AND JOYSTICK WIGGLING? *** THIS IS A LOVE LETTER TO THE 32-BIT GENERATION *** SPECIAL THANKS TO THE DEMOSCENE FOR THE ENDLESS INSPIRATION *** KEEP THE RETRO SPIRIT ALIVE *** DON'T FORGET TO GRAB THE POWER-UPS *** WATCH OUT FOR THE FIREBALL! *** CAN YOU CLEAR ALL 100 SECTORS? *** THE GALAXY IS COUNTING ON YOU PILOT *** NO QUARTERS REQUIRED *** JUST PURE SKILL AND REFLEXES *** STAY TUNED FOR MORE UPDATES *** OVER AND OUT! *** DID YOU KNOW? THE ORIGINAL MEGABALL WAS A STAPLE OF THE AMIGA SHAREWARE SCENE! *** WE ARE KEEPING THE TRADITION ALIVE WITH THIS MODERN TRIBUTE *** FEEL THE SMOOTH 60FPS ACTION *** NO LAG, NO SLOWDOWNS, JUST PURE 32-BIT POWER *** SHOUTOUTS TO ALL THE LEGENDARY GROUPS: RAZOR 1911, FAIRLIGHT, SKIDROW, AND THE REST! *** THE DEMOSCENE LIVES ON IN OUR HEARTS *** DON'T FORGET TO CHECK THE SETTINGS FOR FULLSCREEN MODE *** USE THE MOUSE TO CONTROL THE PADDLE WITH PIXEL-PERFECT PRECISION *** COLLECT THE LASER POWER-UP TO BLAST THROUGH THE BRICKS *** THE MULTIBALL WILL HELP YOU CLEAR THE SCREEN IN NO TIME *** BUT BEWARE OF THE SPEED-UP! *** YOUR REFLEXES WILL BE TESTED TO THE LIMIT *** ARE YOU READY FOR THE ULTIMATE CHALLENGE? *** LET'S GO! *** REMEMBER THE AMIGA 500, 1200, AND 4000? *** THE GLORY DAYS OF THE WORKBENCH AND DELUXE PAINT *** THIS GAME IS BUILT WITH PASSION FOR THE PIXELS *** EVERY BRICK YOU BREAK IS A NOD TO THE PAST *** CAN YOU FIND THE HIDDEN SECRETS? *** THE MUSIC WAS COMPOSED TO BRING BACK THAT MOD-TRACKER FEEL *** CRANK UP THE VOLUME AND LET THE BASS HIT *** WATCH YOUR LIVES, they ARE PRECIOUS *** EXTRA LIVES ARE RARE, so PLAY CAREFULLY *** THE PADDLE IS YOUR ONLY DEFENSE AGAINST THE COSMIC CHAOS *** MASTER THE ANGLES TO BECOME A TRUE MEGABALL PRO *** THANKS FOR PLAYING AND SUPPORTING INDIE RETRO PROJECTS *** SPREAD THE WORD AND CHALLENGE YOUR FRIENDS *** WHO WILL GET THE HIGHEST SCORE? *** THE LEADERBOARD AWAITS YOUR NAME *** KEEP ON GAMING! *** THE AMIGA 1200 BROUGHT us INTO THE 32-BIT ERA WITH STYLE *** LONG LIVE THE AMIGA! ***   ";
+  const scrollerText = "*** MEGABALL AiGA v3.4 RELEASED! *** NEW: COMPACT TACTICAL HUD DEPLOYED *** NUMERIC SHIELD COUNTER ENABLED *** START SCREEN HEADER UNIFIED *** EXPANDED 10-TRACK SOUNDTRACK WITH GAPLESS CROSSFADE MIXING *** PROMPTED BY GMX *** MUSIC PROMPTED BY GMX USING SUNO AI *** GREETINGS TO ALL RETRO GAMERS WORLDWIDE *** CRACKED BY NOBODY *** PLAY LOUD AND PROUD *** EXPERIENCE THE POWER OF THE 32-BIT AGA CHIPSET *** 256 COLORS OF PURE ARCADE ADRENALINE *** REMEMBER THE DAYS OF FLOPPY DISKS AND JOYSTICK WIGGLING? *** THIS IS A LOVE LETTER TO THE 32-BIT GENERATION *** SPECIAL THANKS TO THE DEMOSCENE FOR THE ENDLESS INSPIRATION *** KEEP THE RETRO SPIRIT ALIVE *** DON'T FORGET TO GRAB THE POWER-UPS *** WATCH OUT FOR THE FIREBALL! *** CAN YOU CLEAR ALL 100 SECTORS? *** THE GALAXY IS COUNTING ON YOU PILOT *** NO QUARTERS REQUIRED *** JUST PURE SKILL AND REFLEXES *** STAY TUNED FOR MORE UPDATES *** OVER AND OUT! *** DID YOU KNOW? THE ORIGINAL MEGABALL WAS A STAPLE OF THE AMIGA SHAREWARE SCENE! *** WE ARE KEEPING THE TRADITION ALIVE WITH THIS MODERN TRIBUTE *** FEEL THE SMOOTH 60FPS ACTION *** NO LAG, NO SLOWDOWNS, JUST PURE 32-BIT POWER *** SHOUTOUTS TO ALL THE LEGENDARY GROUPS: RAZOR 1911, FAIRLIGHT, SKIDROW, AND THE REST! *** THE DEMOSCENE LIVES ON IN OUR HEARTS *** DON'T FORGET TO CHECK THE SETTINGS FOR FULLSCREEN MODE *** USE THE MOUSE TO CONTROL THE PADDLE WITH PIXEL-PERFECT PRECISION *** COLLECT THE LASER POWER-UP TO BLAST THROUGH THE BRICKS *** THE MULTIBALL WILL HELP YOU CLEAR THE SCREEN IN NO TIME *** BUT BEWARE OF THE SPEED-UP! *** YOUR REFLEXES WILL BE TESTED TO THE LIMIT *** ARE YOU READY FOR THE ULTIMATE CHALLENGE? *** LET'S GO! *** REMEMBER THE AMIGA 500, 1200, AND 4000? *** THE GLORY DAYS OF THE WORKBENCH AND DELUXE PAINT *** THIS GAME IS BUILT WITH PASSION FOR THE PIXELS *** EVERY BRICK YOU BREAK IS A NOD TO THE PAST *** CAN YOU FIND THE HIDDEN SECRETS? *** THE MUSIC WAS COMPOSED TO BRING BACK THAT MOD-TRACKER FEEL *** CRANK UP THE VOLUME AND LET THE BASS HIT *** WATCH YOUR LIVES, they ARE PRECIOUS *** EXTRA LIVES ARE RARE, so PLAY CAREFULLY *** THE PADDLE IS YOUR ONLY DEFENSE AGAINST THE COSMIC CHAOS *** MASTER THE ANGLES TO BECOME A TRUE MEGABALL PRO *** THANKS FOR PLAYING AND SUPPORTING INDIE RETRO PROJECTS *** SPREAD THE WORD AND CHALLENGE YOUR FRIENDS *** WHO WILL GET THE HIGHEST SCORE? *** THE LEADERBOARD AWAITS YOUR NAME *** KEEP ON GAMING! *** THE AMIGA 1200 BROUGHT us INTO THE 32-BIT ERA WITH STYLE *** LONG LIVE THE AMIGA! ***   ";
 
   const spawnPowerUp = (x: number, y: number) => {
     const powerupProb = 0.2 - Math.min(0.1, (level / 100) * 0.1);
@@ -3484,35 +3484,35 @@ export const Game: React.FC = () => {
               <span className="text-[1.6cqw] font-black text-green-400 leading-none">{score.toString().padStart(6, '0')}</span>
             </div>
             
+            <div className="h-[1.5cqw] w-[1px] bg-white/10" />
+
             <div className="flex flex-col">
               <span className="text-[0.5cqw] uppercase tracking-[0.3em] font-bold text-red-500/60 font-mono leading-tight">Shields</span>
-              <div className="flex gap-[0.3cqw] mt-[0.1cqw]">
-                {Array.from({ length: lives }).map((_, i) => (
-                  <Heart 
-                    key={i} 
-                    size={16}
-                    className="w-[1cqw] h-[1cqw] text-red-500 fill-red-500"
-                  />
-                ))}
+              <div className="flex items-center gap-[0.4cqw] mt-[0.1cqw]">
+                <Heart className="w-[1.2cqw] h-[1.2cqw] text-red-500 fill-red-500" />
+                <span className="text-[1.4cqw] font-black text-red-400 leading-none">x{Math.min(lives, 10)}</span>
               </div>
             </div>
-          </div>
 
-          {/* Tactical Display - Tactical Energy & Powerups (Unified) */}
-          <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
-            <div className="flex flex-col min-w-[12cqw] gap-[0.1cqw]">
+            <div className="h-[1.5cqw] w-[1px] bg-white/10 ml-[0.5cqw]" />
+
+            {/* Tactical Energy - Moved closer to lives */}
+            <div className="flex flex-col min-w-[10cqw] gap-[0.1cqw]">
               <div className="flex justify-between items-center px-1">
-                <span className="text-[0.6cqw] uppercase tracking-[0.2em] font-bold text-cyan-400/50 font-mono">Energy</span>
-                <span className="text-[0.8cqw] text-cyan-400 font-bold font-mono">{Math.floor(energy)}%</span>
+                <span className="text-[0.45cqw] uppercase tracking-[0.2em] font-bold text-cyan-400/50 font-mono">Energy</span>
+                <span className="text-[0.7cqw] text-cyan-400 font-black font-mono leading-none">{Math.floor(energy)}%</span>
               </div>
-              <div className="h-[0.5cqw] bg-white/5 border border-white/10 rounded-full overflow-hidden relative">
+              <div className="h-[0.4cqw] bg-white/5 border border-white/10 rounded-full overflow-hidden relative">
                 <motion.div 
                   className={`h-full transition-[width,background-color] duration-300 ${energy >= 50 ? 'bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.5)]' : 'bg-cyan-600/40'}`} 
                   animate={{ width: `${energy}%` }}
                 />
               </div>
             </div>
-            
+          </div>
+
+          {/* Tactical Display - Powerups Only */}
+          <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
             <div className="flex gap-[0.8cqw] items-center">
               {Array.from(activePowerUps.entries()).map(([type, time]) => {
                 // Determine base duration for circular progress
@@ -3648,10 +3648,31 @@ export const Game: React.FC = () => {
               exit={{ opacity: 0 }}
               className="absolute inset-0 flex flex-col items-center justify-center bg-black/80 z-20 overflow-hidden p-[2cqw] backdrop-blur-sm"
             >
-              {/* High Score on Start Screen */}
-              <div className="absolute top-[2cqw] right-[2cqw] text-right z-30">
-                <span className="text-[1.2cqw] text-yellow-500/60 uppercase block tracking-[0.2em]">High Score</span>
-                <span className="text-[3.5cqw] font-black text-yellow-500 drop-shadow-[0_0_10px_rgba(250,204,21,0.5)]">{highScore.toLocaleString()}</span>
+              {/* Star Screen Header - Unified Layout */}
+              <div className="absolute top-0 left-0 w-full p-[2.5cqw] flex justify-between items-start z-40 pointer-events-none">
+                <div className="flex flex-col pointer-events-auto">
+                  <span className="text-[0.8cqw] text-yellow-500/60 uppercase tracking-[0.3em] font-bold font-mono leading-tight">Hall of Fame Peak</span>
+                  <span className="text-[2.8cqw] font-black text-yellow-500 drop-shadow-[0_0_15px_rgba(234,179,8,0.6)] leading-none italic">
+                    {highScore.toLocaleString()}
+                  </span>
+                </div>
+                
+                <div className="flex items-center gap-[1.5cqw] pointer-events-auto">
+                  <button 
+                    onClick={toggleMute}
+                    className="p-[0.6cqw] bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/40 hover:text-white transition-all transform hover:scale-110 active:scale-95"
+                    title="Toggle Sound"
+                  >
+                    {isMuted ? <VolumeX className="w-[1.8cqw] h-[1.8cqw]" /> : <Volume2 className="w-[1.8cqw] h-[1.8cqw]" />}
+                  </button>
+                  <button 
+                    onClick={toggleFullscreen}
+                    className="p-[0.6cqw] bg-white/5 hover:bg-white/10 border border-white/10 rounded-full text-white/40 hover:text-white transition-all transform hover:scale-110 active:scale-95"
+                    title="Toggle Fullscreen"
+                  >
+                    {isFullscreen ? <Minimize className="w-[1.8cqw] h-[1.8cqw]" /> : <Maximize className="w-[1.8cqw] h-[1.8cqw]" />}
+                  </button>
+                </div>
               </div>
 
               {/* Copper Bars Effect - Optimized to CSS */}
@@ -3684,7 +3705,7 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v3.3.0429.2104
+                      RELEASE v3.4.0429.2110
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
