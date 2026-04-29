@@ -188,6 +188,29 @@ export const Game: React.FC = () => {
   const [ghostPaddleActive, setGhostPaddleActive] = useState(false);
   const [hasPaddleMovedSinceLevelStart, setHasPaddleMovedSinceLevelStart] = useState(false);
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showOrientationPrompt, setShowOrientationPrompt] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera;
+      const mobile = /android|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+      const ios = /iphone|ipad|ipod/.test(userAgent.toLowerCase());
+      setIsMobile(mobile);
+      setIsIOS(ios);
+      
+      if (mobile && window.innerHeight > window.innerWidth) {
+        setShowOrientationPrompt(true);
+      } else {
+        setShowOrientationPrompt(false);
+      }
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   const [physicalObjects, setPhysicalObjects] = useState<PhysicalObject[]>([]);
   const [lastPaddleX, setLastPaddleX] = useState(0);
   const [paddleVelocity, setPaddleVelocity] = useState(0);
@@ -902,6 +925,12 @@ export const Game: React.FC = () => {
 
   const startGame = (infinite = isInfiniteMode) => {
     console.log("Starting game...");
+    
+    // Auto-fullscreen on mobile
+    if (isMobile && !isFullscreen) {
+      toggleFullscreen();
+    }
+    
     audioService.warmUpTTS();
     setIsInfiniteMode(infinite);
     audioService.stopGameOver();
@@ -946,28 +975,39 @@ export const Game: React.FC = () => {
     const doc = document as any;
     const element = containerRef.current as any;
 
-    if (!doc.fullscreenElement && !doc.mozFullScreenElement && !doc.webkitFullscreenElement && !doc.msFullscreenElement) {
+    const isCurrentlyFull = !!(doc.fullscreenElement || doc.mozFullScreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement);
+
+    if (!isCurrentlyFull) {
       if (element) {
         const requestMethod = element.requestFullscreen || element.mozRequestFullScreen || element.webkitRequestFullscreen || element.msRequestFullscreen;
+        
         if (requestMethod) {
           requestMethod.call(element).then(() => {
             setIsFullscreen(true);
+            
+            if (screen.orientation && (screen.orientation as any).lock) {
+              (screen.orientation as any).lock('landscape').catch(() => {});
+            }
+
             if (gameState === 'PLAYING') {
               element.requestPointerLock?.();
             }
-          }).catch((err: any) => {
-            console.error(`Fullscreen failed: ${err.message}`);
-            // Fallback: at least toggle the internal state for "pseudo-fullscreen"
+          }).catch(() => {
             setIsFullscreen(true);
           });
         } else {
+          // iOS Safari fallback
           setIsFullscreen(true);
+          // On iOS, we can't lock orientation via API, we just show the prompt
         }
       }
     } else {
       const exitMethod = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
       if (exitMethod) {
         exitMethod.call(doc);
+        if (screen.orientation && (screen.orientation as any).unlock) {
+          screen.orientation.unlock();
+        }
         setIsFullscreen(false);
       } else {
         setIsFullscreen(false);
@@ -3380,11 +3420,12 @@ export const Game: React.FC = () => {
     <div 
       ref={containerRef}
       className={`fixed inset-0 flex flex-col items-center justify-center bg-[#050505] text-white font-mono overflow-hidden select-none ${isCursorHidden ? 'cursor-none' : ''}`}
+      style={{ height: '100dvh', width: '100dvw' }}
     >
       <div 
         className={`relative flex flex-col bg-black border-4 border-green-500 shadow-[0_0_60px_rgba(0,255,0,0.2)] rounded-lg overflow-hidden
-          ${isFullscreen ? 'w-full h-full' : 'w-[95vw] h-[95vh] max-w-[1400px] max-h-[90vh] aspect-[10/7]'}
-          [container-type:size] self-center`}
+          ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-[95dvw] h-[95dvh] max-w-[1400px] max-h-[90dvh] aspect-[10/7]'}
+          [container-type:size] self-center transition-all duration-500`}
       >
         {/* HUD with Copper Effect */}
         <div className={`relative w-full h-[8cqw] px-[1.5cqw] flex justify-between items-center bg-black z-10 border-b-2 border-green-500/50 shrink-0 overflow-hidden ${isCursorHidden ? 'cursor-none' : ''} opacity-100 transition-opacity duration-700`}>
@@ -3555,10 +3596,19 @@ export const Game: React.FC = () => {
                   <div className="flex flex-col items-center">
                     <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
                     <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                      RELEASE v2.3.0429.0641
+                      RELEASE v2.6.0429.1321
                     </div>
                   </div>
                   <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest animate-pulse mt-[1cqw]">Click to activate sound & start</p>
+                  {showOrientationPrompt && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="mt-[2cqw] px-[2cqw] py-[1cqw] bg-red-500/20 border border-red-500/40 text-red-400 text-[1.2cqw] font-bold uppercase tracking-[0.2em] rounded"
+                    >
+                      ⚠️ Please rotate to LANDSCAPE for best experience
+                    </motion.div>
+                  )}
                 </motion.div>
 
                 <div className="flex flex-col items-center gap-[1cqh]">
@@ -3580,6 +3630,16 @@ export const Game: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-wrap justify-center gap-[2cqw]">
+                  {isMobile && !isFullscreen && (
+                    <button
+                      onClick={toggleFullscreen}
+                      className="group relative flex items-center gap-[1.5cqw] px-[4cqw] py-[1.5cqw] bg-yellow-600 hover:bg-yellow-500 text-black font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(234,179,8,0.4)]"
+                    >
+                      <Maximize className="w-[2.5cqw] h-[2.5cqw]" />
+                      FULLSCREEN LANDSCAPE
+                      <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-yellow-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                  )}
                   <button
                     onClick={() => startGame(false)}
                     className="group relative flex items-center gap-[1.5cqw] px-[5cqw] py-[1.5cqw] bg-green-600 hover:bg-green-500 text-black font-black text-[2cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(0,255,0,0.4)]"
