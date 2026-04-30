@@ -1513,8 +1513,8 @@ export const Game: React.FC = () => {
       particlesRef.current.push({
         x,
         y,
-        vx: (Math.random() - 0.5) * 10,
-        vy: (Math.random() - 0.5) * 10,
+        dx: (Math.random() - 0.5) * 10,
+        dy: (Math.random() - 0.5) * 10,
         life: 1.0 + Math.random() * 0.5,
         color,
         size: Math.random() * 4 + 1
@@ -1631,14 +1631,26 @@ export const Game: React.FC = () => {
         ball.dy *= 1.0001;
       }
 
-      // Wall collisions
-      if (ball.x + BALL_RADIUS > GAME_WIDTH || ball.x - BALL_RADIUS < 0) {
-        ball.dx = -ball.dx;
+      // Wall collisions with strict clamping to prevent escaping the bounds
+      if (ball.x - BALL_RADIUS < 0) {
+        ball.x = BALL_RADIUS;
+        ball.dx = Math.abs(ball.dx);
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
+        // Prevent pure vertical movement near walls
+        if (Math.abs(ball.dx) < 2) ball.dx = 2;
+      } else if (ball.x + BALL_RADIUS > GAME_WIDTH) {
+        ball.x = GAME_WIDTH - BALL_RADIUS;
+        ball.dx = -Math.abs(ball.dx);
+        ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
+        audioService.playSfx('wall');
+        // Prevent pure vertical movement near walls
+        if (Math.abs(ball.dx) < 2) ball.dx = -2;
       }
+
       if (ball.y - BALL_RADIUS < 0) {
-        ball.dy = -ball.dy;
+        ball.y = BALL_RADIUS;
+        ball.dy = Math.abs(ball.dy);
         ball.isPiercing = false;
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
@@ -1658,9 +1670,9 @@ export const Game: React.FC = () => {
         }
         ball.consecutiveWallHits = 0;
       }
-      // Too horizontal/vertical loop fix
-      if (Math.abs(ball.dy) < 1.0) ball.dy = ball.dy > 0 ? 1.0 : -1.0; // Increased min vertical speed
-      if (Math.abs(ball.dx) < 1.0) ball.dx = ball.dx > 0 ? 1.0 : -1.0;
+      // Too horizontal/vertical loop fix - ensure minimum diagonal movement
+      if (Math.abs(ball.dy) < 1.5) ball.dy = ball.dy > 0 ? 1.5 : -1.5; 
+      if (Math.abs(ball.dx) < 1.5) ball.dx = ball.dx > 0 ? 1.5 : -1.5;
 
       // Floor collision
       if (hasFloor && ball.y + BALL_RADIUS > GAME_HEIGHT - 10) {
@@ -1694,20 +1706,23 @@ export const Game: React.FC = () => {
 
       // (Redundant block removed, interaction handled below)
 
+      const paddleY = GAME_HEIGHT - PADDLE_HEIGHT;
+      const ballPrevY = ball.y - ball.dy * speedMultiplier;
+      const isCrossingPaddle = ballPrevY + BALL_RADIUS <= paddleY && ball.y + BALL_RADIUS >= paddleY;
+
       // Paddle collision
       if (
         ball.dy > 0 && 
-        ball.y + BALL_RADIUS > GAME_HEIGHT - PADDLE_HEIGHT - 5 && // Visual buffer
-        ball.y + BALL_RADIUS < GAME_HEIGHT && 
-        ball.x > paddle.x - 5 &&
-        ball.x < paddle.x + paddle.width + 5
+        (isCrossingPaddle || (ball.y + BALL_RADIUS > paddleY - 10 && ball.y + BALL_RADIUS < GAME_HEIGHT)) && 
+        ball.x > paddle.x - 10 &&
+        ball.x < paddle.x + paddle.width + 10
       ) {
         if (activePowerUps.has(PowerUpType.GLUE)) {
           ball.isStuck = true;
           ball.stuckOffset = ball.x - paddle.x;
+          ball.y = paddleY - BALL_RADIUS;
         } else {
           // Accurate reflection physics: angle based on hit position
-          // Normalized hit position from -1 to 1
           const relativeHitX = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
           
           // Max bounce angle is 75 degrees
@@ -1719,14 +1734,14 @@ export const Game: React.FC = () => {
           ball.dy = -speed * Math.cos(bounceAngle);
           
           // Move ball outside paddle to prevent multi-hit logic errors
-          ball.y = GAME_HEIGHT - PADDLE_HEIGHT - BALL_RADIUS - 5;
+          ball.y = paddleY - BALL_RADIUS - 2;
           
           // Ensure min horizontal velocity to avoid purely vertical paths
-          if (Math.abs(ball.dx) < 1.0) ball.dx = ball.dx > 0 ? 1.0 : -1.0;
+          if (Math.abs(ball.dx) < 2.0) ball.dx = ball.dx > 0 ? 2.0 : -2.0;
           
           ball.isPiercing = false;
           ball.consecutiveWallHits = 0;
-          ball.spin = (paddleVelocity * 0.08); // Reduced spin influence for stability
+          ball.spin = (paddleVelocity * 0.08); 
           setEnergy(e => Math.min(100, e + 5));
         }
         audioService.playSfx('paddle');
