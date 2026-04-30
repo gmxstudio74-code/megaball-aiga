@@ -95,6 +95,8 @@ export interface Ball {
   isCruiser?: boolean;
   cruiserTimer?: number;
   rotation?: number;
+  squish?: number; // Current deformation (-1 to 1)
+  squishDir?: number; // Direction of squish (radians)
 }
 
 export type PhysicalObjectType = 'GEAR' | 'FAN' | 'MAGNET' | 'WARP_GATE' | 'CRUSHER' | 'CONVEYOR';

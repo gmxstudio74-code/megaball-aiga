@@ -215,7 +215,6 @@ export const Game: React.FC = () => {
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
   const [widePaddleTimers, setWidePaddleTimers] = useState<{time: number, id: number}[]>([]);
   const widePaddleIdRef = useRef(0);
-  const [flashOpacity, setFlashOpacity] = useState(0);
   const [sectorShow, setSectorShow] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -985,7 +984,9 @@ export const Game: React.FC = () => {
       isFireball: false,
       consecutiveWallHits: 0,
       radiusScale: 1,
-      combo: 0
+      combo: 0,
+      squish: 0,
+      squishDir: 0
     }];
     console.log("Ball count after reset:", ballsRef.current.length);
     paddleRef.current.x = (GAME_WIDTH - baseWidth) / 2;
@@ -1369,14 +1370,12 @@ export const Game: React.FC = () => {
   const handleLifeLost = () => {
     if (lives <= 1) {
       setGameState('GAMEOVER');
-      setFlashOpacity(0.8);
       audioService.playGameOver();
       audioService.playVoice("Game over. You are defeated!");
       setIsRespawning(false);
       setLives(0);
     } else {
       setIsRespawning(true);
-      setFlashOpacity(0.5);
       audioService.playSfx('lose');
       audioService.playVoice("Life lost!");
       setLives(l => l - 1);
@@ -1609,6 +1608,11 @@ export const Game: React.FC = () => {
       
       if (ball.radiusScale && ball.radiusScale > 1) {
         ball.rotation = (ball.rotation || 0) + 0.05 * (delta / 16.67);
+        // Decay squish
+        if (ball.squish !== undefined) {
+          ball.squish *= 0.85; // Decay
+          if (Math.abs(ball.squish) < 0.01) ball.squish = 0;
+        }
       }
     });
 
@@ -1756,6 +1760,10 @@ export const Game: React.FC = () => {
         ball.dx = Math.abs(ball.dx);
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
+        if (ball.radiusScale && ball.radiusScale > 1) {
+          ball.squish = -0.4;
+          ball.squishDir = 0;
+        }
         // Prevent pure vertical movement near walls
         if (Math.abs(ball.dx) < 2) ball.dx = 2;
       } else if (ball.x + r > GAME_WIDTH) {
@@ -1763,6 +1771,10 @@ export const Game: React.FC = () => {
         ball.dx = -Math.abs(ball.dx);
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
+        if (ball.radiusScale && ball.radiusScale > 1) {
+          ball.squish = -0.4;
+          ball.squishDir = 0;
+        }
         // Prevent pure vertical movement near walls
         if (Math.abs(ball.dx) < 2) ball.dx = -2;
       }
@@ -1773,6 +1785,10 @@ export const Game: React.FC = () => {
         ball.isPiercing = false;
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
+        if (ball.radiusScale && ball.radiusScale > 1) {
+          ball.squish = -0.4;
+          ball.squishDir = Math.PI / 2;
+        }
       }
 
       // Anti-loop logic
@@ -1854,6 +1870,10 @@ export const Game: React.FC = () => {
           ball.dy = -speed * Math.cos(bounceAngle);
           
           ball.combo = 0; // Reset combo on paddle hit
+          if (ball.radiusScale && ball.radiusScale > 1) {
+            ball.squish = -0.6;
+            ball.squishDir = Math.PI / 2;
+          }
           
           // Move ball outside paddle to prevent multi-hit logic errors
           ball.y = paddleY - r - 2;
@@ -2140,17 +2160,33 @@ export const Game: React.FC = () => {
               if (hitLeft || hitRight) {
                 ball.dx *= -1;
                 ball.x = hitLeft ? brick.x - r : brick.x + brick.width + r;
+                if (ball.radiusScale && ball.radiusScale > 1) {
+                  ball.squish = -0.4;
+                  ball.squishDir = 0;
+                }
               } else if (hitTop || hitBottom) {
                 ball.dy *= -1;
                 ball.y = hitTop ? brick.y - r : brick.y + brick.height + r;
+                if (ball.radiusScale && ball.radiusScale > 1) {
+                  ball.squish = -0.4;
+                  ball.squishDir = Math.PI / 2;
+                }
               } else {
                 // Fallback to minimal overlap if previous pos was already inside or ambiguous
                 if (minOverlap === overlapLeft || minOverlap === overlapRight) {
                   ball.dx = Math.abs(ball.dx) * (minOverlap === overlapLeft ? -1 : 1);
                   ball.x = minOverlap === overlapLeft ? brick.x - r : brick.x + brick.width + r;
+                  if (ball.radiusScale && ball.radiusScale > 1) {
+                    ball.squish = -0.4;
+                    ball.squishDir = 0;
+                  }
                 } else {
                   ball.dy = Math.abs(ball.dy) * (minOverlap === overlapTop ? -1 : 1);
                   ball.y = minOverlap === overlapTop ? brick.y - r : brick.y + brick.height + r;
+                  if (ball.radiusScale && ball.radiusScale > 1) {
+                    ball.squish = -0.4;
+                    ball.squishDir = Math.PI / 2;
+                  }
                 }
               }
               
@@ -2897,12 +2933,6 @@ export const Game: React.FC = () => {
     // Screen Shake END
     ctx.restore();
 
-    // Damage Flash
-    if (flashOpacity > 0) {
-      ctx.fillStyle = `rgba(255, 0, 0, ${flashOpacity})`;
-      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-    }
-
     // Sector Intro
     if (sectorShow && gameState === 'PLAYING') {
       ctx.save();
@@ -3449,17 +3479,6 @@ export const Game: React.FC = () => {
     ballsRef.current.forEach(ball => {
       const r = BALL_RADIUS * (ball.radiusScale || 1);
       
-      // Update combo and handle floating text
-      if (ball.combo && ball.combo >= 3) {
-        ctx.save();
-        ctx.fillStyle = ball.combo >= 10 ? '#ef4444' : (ball.combo >= 5 ? '#f59e0b' : '#3b82f6');
-        ctx.font = `bold ${10 + Math.min(ball.combo, 20)}px "JetBrains Mono", monospace`;
-        ctx.textAlign = 'center';
-        ctx.globalAlpha = 0.8;
-        ctx.fillText(`x${ball.combo}`, ball.x, ball.y - r - 10);
-        ctx.restore();
-      }
-
       if (level === 3) {
         // 8-bit style (square)
         ctx.shadowBlur = 0;
@@ -3484,51 +3503,36 @@ export const Game: React.FC = () => {
         ctx.globalAlpha = 1.0;
 
         if (ball.radiusScale && ball.radiusScale > 1) {
-          // Big Ball: Round, Rotating Checkered Texture, Deforming
+          // Big Ball: Round, Smooth, Deforming like air-filled
           ctx.save();
           ctx.translate(ball.x, ball.y);
-          ctx.rotate(ball.rotation || 0);
           
-          // Inflatable deformation effect
-          const deformSpeed = Date.now() / 200;
-          const deformScaleX = 1 + Math.sin(deformSpeed) * 0.08;
-          const deformScaleY = 1 + Math.cos(deformSpeed) * 0.08;
-          ctx.scale(deformScaleX, deformScaleY);
+          // Apply hit-based squish and stretch
+          const squishAmount = ball.squish || 0;
+          const squishDir = ball.squishDir || 0;
+          ctx.rotate(squishDir);
           
-          // Draw the ball base
+          // Calculate scale factors based on squish
+          // volume preservation: scaleX * scaleY = 1
+          const scaleX = 1 + squishAmount;
+          const scaleY = 1 / scaleX;
+          ctx.scale(scaleX, scaleY);
+          
+          // Draw the ball with AGA-style gradient but no checkered texture
+          const ballGrad = ctx.createRadialGradient(-r/3, -r/3, r/6, 0, 0, r);
+          ballGrad.addColorStop(0, '#ffffff');
+          ballGrad.addColorStop(0.3, '#c084fc');
+          ballGrad.addColorStop(1, '#a855f7');
+          
+          ctx.fillStyle = ballGrad;
           ctx.beginPath();
           ctx.arc(0, 0, r, 0, Math.PI * 2);
-          ctx.clip(); // Clip to circle shape
-
-          // Draw Checkered/Grid Texture
-          const gridSize = r / 2;
-          for (let ix = -r * 2; ix < r * 2; ix += gridSize) {
-            for (let iy = -r * 2; iy < r * 2; iy += gridSize) {
-              const isWhite = (Math.abs(ix / gridSize) + Math.abs(iy / gridSize)) % 2 === 0;
-              ctx.fillStyle = isWhite ? '#ffffff' : '#333333';
-              ctx.fillRect(ix, iy, gridSize, gridSize);
-            }
-          }
+          ctx.fill();
           
-          // Outer border and shine
-          ctx.restore();
-          ctx.save();
-          ctx.translate(ball.x, ball.y);
-          ctx.scale(deformScaleX, deformScaleY);
-          
+          // Shine highlight
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
           ctx.beginPath();
-          ctx.arc(0, 0, r, 0, Math.PI * 2);
-          ctx.strokeStyle = '#666666';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          // Highlight for 3D look
-          const shineGrad = ctx.createRadialGradient(-r/3, -r/3, r/10, 0, 0, r);
-          shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
-          shineGrad.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
-          ctx.fillStyle = shineGrad;
-          ctx.beginPath();
-          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.arc(-r/3, -r/3, r/4, 0, Math.PI * 2);
           ctx.fill();
           
           ctx.restore();
@@ -3536,9 +3540,10 @@ export const Game: React.FC = () => {
           // Outer Glow
           ctx.save();
           ctx.shadowBlur = 15;
-          ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+          ctx.shadowColor = 'rgba(168, 85, 247, 0.5)';
           ctx.beginPath();
           ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(168, 85, 247, 0.3)';
           ctx.stroke();
           ctx.restore();
 
@@ -3757,12 +3762,11 @@ export const Game: React.FC = () => {
 
     // Update flashes and intro
     useEffect(() => {
-      if (flashOpacity > 0) setFlashOpacity(prev => Math.max(0, prev - 0.05));
       if (sectorShow && gameState === 'PLAYING') {
         const timer = setTimeout(() => setSectorShow(false), 2000);
         return () => clearTimeout(timer);
       }
-    }, [flashOpacity, sectorShow, gameState]);
+    }, [sectorShow, gameState]);
 
   useGameLoop((delta) => {
     update(delta);
