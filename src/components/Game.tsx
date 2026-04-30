@@ -48,6 +48,7 @@ import {
   User,
   Send,
   List,
+  ChevronDown,
   Flame,
   Ghost,
   Target,
@@ -169,6 +170,7 @@ export const Game: React.FC = () => {
   const [highScore, setHighScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [level, setLevel] = useState(1);
+  const [bricksLeft, setBricksLeft] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [activePowerUps, setActivePowerUps] = useState<Map<PowerUpType, number>>(new Map());
   const [isLevel3Intro, setIsLevel3Intro] = useState(false);
@@ -507,19 +509,27 @@ export const Game: React.FC = () => {
   useEffect(() => {
     const startMusicOnFirstInteraction = () => {
       audioService.resumeContext();
+      if (gameState === 'START') {
+        audioService.playMusic(0, false); // Play title music
+      }
+      window.removeEventListener('mousemove', startMusicOnFirstInteraction);
       window.removeEventListener('click', startMusicOnFirstInteraction);
       window.removeEventListener('keydown', startMusicOnFirstInteraction);
       window.removeEventListener('touchstart', startMusicOnFirstInteraction);
     };
+    window.addEventListener('mousedown', startMusicOnFirstInteraction);
+    window.addEventListener('mousemove', startMusicOnFirstInteraction);
     window.addEventListener('click', startMusicOnFirstInteraction);
     window.addEventListener('keydown', startMusicOnFirstInteraction);
     window.addEventListener('touchstart', startMusicOnFirstInteraction);
     return () => {
+      window.removeEventListener('mousedown', startMusicOnFirstInteraction);
+      window.removeEventListener('mousemove', startMusicOnFirstInteraction);
       window.removeEventListener('click', startMusicOnFirstInteraction);
       window.removeEventListener('keydown', startMusicOnFirstInteraction);
       window.removeEventListener('touchstart', startMusicOnFirstInteraction);
     };
-  }, [isMuted, isFullscreen, level, isInfiniteMode]);
+  }, [gameState, isMuted, isFullscreen, level, isInfiniteMode]);
 
   const initBricks = useCallback((currentLevel: number) => {
     setIsLevel3Intro(currentLevel === 3);
@@ -527,11 +537,14 @@ export const Game: React.FC = () => {
     const bricks: Brick[] = [];
     
     // Standard resolution for all levels
-    const rows = 20;
-    const cols = currentLevel === 3 ? 40 : 20;
+    // Professional arcade resolution
+    const rows = 14; 
+    const cols = currentLevel === 3 ? 32 : 16; 
     
-    const brickWidth = (GAME_WIDTH - BRICK_OFFSET_LEFT * 2) / cols - BRICK_PADDING;
-    const brickHeight = 20;
+    const offsetLeft = 100; // Generous side margins for 16:9 feel
+    const offsetTop = 80;
+    const brickWidth = (GAME_WIDTH - offsetLeft * 2) / cols - BRICK_PADDING;
+    const brickHeight = 20; // Slightly smaller for better proportions
 
     const getLogoInfo = (r: number, c: number, midC: number) => {
       return { isLogo: false, isCentral: false, isArm: false };
@@ -552,8 +565,8 @@ export const Game: React.FC = () => {
       // Top row border
       for (let c = 0; c < cols; c++) {
         bricks.push({
-          x: BRICK_OFFSET_LEFT + c * (brickWidth + BRICK_PADDING),
-          y: BRICK_OFFSET_TOP,
+          x: offsetLeft + c * (brickWidth + BRICK_PADDING),
+          y: offsetTop,
           width: brickWidth,
           height: brickHeight,
           color: colors[c % colors.length],
@@ -562,11 +575,11 @@ export const Game: React.FC = () => {
       }
       
       // Far Left and Far Right pillars
-      for (let r = 1; r < 15; r++) {
+      for (let r = 1; r < 22; r++) {
         // Left
         bricks.push({
-          x: BRICK_OFFSET_LEFT,
-          y: BRICK_OFFSET_TOP + r * (brickHeight + BRICK_PADDING),
+          x: offsetLeft,
+          y: offsetTop + r * (brickHeight + BRICK_PADDING),
           width: brickWidth,
           height: brickHeight,
           color: colors[r % colors.length],
@@ -574,8 +587,8 @@ export const Game: React.FC = () => {
         });
         // Right
         bricks.push({
-          x: BRICK_OFFSET_LEFT + (cols - 1) * (brickWidth + BRICK_PADDING),
-          y: BRICK_OFFSET_TOP + r * (brickHeight + BRICK_PADDING),
+          x: offsetLeft + (cols - 1) * (brickWidth + BRICK_PADDING),
+          y: offsetTop + r * (brickHeight + BRICK_PADDING),
           width: brickWidth,
           height: brickHeight,
           color: colors[r % colors.length],
@@ -583,22 +596,22 @@ export const Game: React.FC = () => {
         });
       }
 
-      // 2. The 8-BIT text layout (centered)
-      const startX = 6;
-      const startY = 4;
+      // 2. The 8-BIT text layout (centered in 32 cols)
+      const startX = 4;
+      const startY = offsetTop + (brickHeight + BRICK_PADDING) * 3;
       const pattern = [
         " XXX  XXXX  XXXXX  XXXXX",
-        "X   X X   X   X      X  ",
-        " XXX  XXXX    X      X  ",
-        "X   X X   X   X      X  ",
-        " XXX  XXXX  XXXXX    X  "
+        "X   X X   X   X      X",
+        " XXX  XXXX    X      X",
+        "X   X X   X   X      X",
+        " XXX  XXXX  XXXXX    X"
       ];
       pattern.forEach((line, rOffset) => {
         line.split('').forEach((char, cOffset) => {
           if (char === 'X') {
             bricks.push({
-              x: BRICK_OFFSET_LEFT + (startX + cOffset) * (brickWidth + BRICK_PADDING),
-              y: BRICK_OFFSET_TOP + (startY + rOffset) * (brickHeight + BRICK_PADDING),
+              x: offsetLeft + (startX + cOffset) * (brickWidth + BRICK_PADDING),
+              y: startY + rOffset * (brickHeight + BRICK_PADDING),
               width: brickWidth,
               height: brickHeight,
               color: '#ffffff', // Keep white for the text contrast
@@ -609,11 +622,11 @@ export const Game: React.FC = () => {
       });
 
       // 3. Colorful accents below the text
-      const accentY = 12;
-      for (let c = 4; c < cols - 4; c++) {
+      const accentY = 9;
+      for (let c = 2; c < cols - 2; c++) {
         bricks.push({
-          x: BRICK_OFFSET_LEFT + c * (brickWidth + BRICK_PADDING),
-          y: BRICK_OFFSET_TOP + accentY * (brickHeight + BRICK_PADDING),
+          x: offsetLeft + c * (brickWidth + BRICK_PADDING),
+          y: offsetTop + accentY * (brickHeight + BRICK_PADDING),
           width: brickWidth,
           height: brickHeight,
           color: '#00ffff',
@@ -623,10 +636,10 @@ export const Game: React.FC = () => {
 
       // 4. Indestructible platform divider
       for(let i=0; i<cols; i++) {
-        if (i % 5 === 0) continue;
+        if (i % 4 === 0) continue;
         bricks.push({
-          x: BRICK_OFFSET_LEFT + i * (brickWidth + BRICK_PADDING),
-          y: BRICK_OFFSET_TOP + 180 + 150, // Moved lower
+          x: offsetLeft + i * (brickWidth + BRICK_PADDING),
+          y: offsetTop + 280, 
           width: brickWidth, height: 10, color: '#444444', active: true, hits: 1, indestructible: true, type: 'NORMAL'
         });
       }
@@ -707,29 +720,28 @@ export const Game: React.FC = () => {
         }
       } else {
         const patternType = Math.floor(rng(seed) * 16);
-        const maxBrickRows = 12; // Increased for taller designs
+        const maxBrickRows = 10; 
 
         for (let r = 0; r < maxBrickRows; r++) {
           for (let c = 0; c < cols; c++) {
             let spawn = false;
-            const midR = 5, midC = 9.5;
-            const symC = c < 10 ? c : 19 - c; // Symmetrical column index
+            const midR = 5, midC = 7.5;
+            const symC = c < 8 ? c : 15 - c; // Symmetrical column index
             const diffR = Math.abs(r - midR);
             const diffC = Math.abs(c - midC);
-            const symDiffC = Math.abs(symC - 4.5); 
 
             switch(patternType) {
-              case 0: spawn = r < 8 && symC >= (7-r); break; // Pyramid
-              case 1: spawn = (diffR + Math.abs(symC - 5)) <= 5; break; // Diamond
+              case 0: spawn = r < 10 && symC >= (9-r); break; // Pyramid
+              case 1: spawn = (diffR + Math.abs(symC - 8)) <= 8; break; // Diamond
               case 2: spawn = r < 10 && (symC % 3 < 2); break; // Vertical Bars
               case 3: spawn = r < 10 && (r % 3 < 2); break; // Horizontal Bars
-              case 4: spawn = (r < 9) && (r === 0 || r === 8 || c === 0 || c === cols - 1); break; // Box
-              case 5: spawn = (r < 9) && (r === 4 || c === 9 || c === 10); break; // Cross
-              case 6: spawn = (r < 9) && (Math.abs(r - symC) < 2); break; // V / X shape
-              case 7: spawn = r < 8 && (Math.sin(symC * 0.8) * 3 + 4 > r); break; // Waves
-              case 8: spawn = (r < 8) && (r + symC < 8); break; // Corner clusters
+              case 4: spawn = (r < 10) && (r === 0 || r === 9 || c === 0 || c === cols - 1); break; // Box
+              case 5: spawn = (r < 10) && (r === 5 || c === 7 || c === 8); break; // Cross
+              case 6: spawn = (r < 10) && (Math.abs(r - symC) < 2); break; // V / X shape 
+              case 7: spawn = r < 10 && (Math.sin(symC * 0.7) * 4 + 5 > r); break; // Waves
+              case 8: spawn = (r < 10) && (r + symC < 10); break; // Corner clusters
               case 9: // Heart
-                const heartX = (c - 9.5) / 5;
+                const heartX = (c - 7.5) / 6;
                 const heartY = (r - 4) / 5;
                 spawn = Math.pow(heartX*heartX + heartY*heartY - 1, 3) - heartX*heartX*heartY*heartY*heartY <= 0;
                 break;
@@ -738,21 +750,21 @@ export const Game: React.FC = () => {
                 break;
               case 11: // Rings
                 const distToCenter = Math.sqrt(diffR * diffR + diffC * diffC);
-                spawn = Math.floor(distToCenter) % 3 === 0 && distToCenter < 9;
+                spawn = Math.floor(distToCenter) % 3 === 0 && distToCenter < 10;
                 break;
               case 12: // Space Invader (roughly)
                 const invaderRows = [
-                  [0,0,1,0,0], [0,1,1,1,0], [1,1,1,1,1], [1,0,1,0,1], [1,1,1,1,1], [0,1,0,1,0]
+                  [0,0,1,0,0,0], [0,1,1,1,0,0], [1,1,1,1,1,1], [1,0,1,0,1,0], [1,1,1,1,1,1], [0,1,0,1,0,0]
                 ];
-                if (r < 6 && symC < 5) spawn = invaderRows[r][Math.floor(symC)] === 1;
+                if (r < 6 && symC < 6) spawn = invaderRows[r][Math.floor(symC)] === 1;
                 break;
               case 13: // Zig Zag
-                spawn = r < 10 && (c % 6 === r % 6 || (6-c%6) === r % 6);
+                spawn = r < 16 && (c % 6 === r % 6 || (6-c%6) === r % 6);
                 break;
               case 14: // Frame within frame
-                spawn = r < 10 && (r % 4 === 0 || c % 4 === 0);
+                spawn = r < 16 && (r % 4 === 0 || c % 4 === 0);
                 break;
-              default: spawn = r < 8 && rng(seed + r * 37 + symC) < 0.5; // Random Symmetric
+              default: spawn = r < 14 && rng(seed + r * 37 + symC) < 0.45; // Random Symmetric
             }
 
             if (spawn) {
@@ -775,8 +787,8 @@ export const Game: React.FC = () => {
               }
 
               bricks.push({
-                x: c * (brickWidth + BRICK_PADDING) + BRICK_OFFSET_LEFT,
-                y: r * (brickHeight + BRICK_PADDING) + BRICK_OFFSET_TOP,
+                x: offsetLeft + c * (brickWidth + BRICK_PADDING),
+                y: offsetTop + r * (brickHeight + BRICK_PADDING),
                 width: brickWidth, height: brickHeight,
                 color, active: true, hits, type, revealed,
                 indestructible: currentLevel > 15 && rng(propSeed + 100) < 0.05,
@@ -897,7 +909,9 @@ export const Game: React.FC = () => {
       setPhysicalObjects([]);
       physicalObjectsRef.current = [];
     }
-  }, []);
+
+    setBricksLeft(bricks.filter(b => b.active && !b.indestructible).length);
+  }, [setBricksLeft, audioService]);
 
   const resetBall = (keepLevel = false) => {
     console.log("Resetting ball...");
@@ -1763,6 +1777,7 @@ export const Game: React.FC = () => {
             if (brick.type === 'GHOST') {
               brick.hits = 0; // Destroy immediately
               brick.active = false;
+              setBricksLeft(prev => Math.max(0, prev - 1));
               setScore(s => s + 15);
               spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, 'rgba(255,255,255,0.5)');
               audioService.playSfx('wall');
@@ -1803,6 +1818,7 @@ export const Game: React.FC = () => {
             brick.hits--;
             if (brick.hits <= 0) {
               brick.active = false;
+              setBricksLeft(prev => Math.max(0, prev - 1));
               setScore(s => s + 10);
               spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
               spawnPowerUp(brick.x + brick.width / 2, brick.y + brick.height / 2);
@@ -1820,6 +1836,7 @@ export const Game: React.FC = () => {
                       // 60% chance to explode neighbor
                       if (Math.random() > 0.4) {
                         otherBrick.active = false;
+                        setBricksLeft(prev => Math.max(0, prev - 1));
                         setScore(s => s + 10);
                         spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, otherBrick.color);
                         audioService.playBreakSound();
@@ -1841,6 +1858,9 @@ export const Game: React.FC = () => {
                     const bDist = Math.sqrt(bDx*bDx + bDy*bDy);
                     if (bDist < blastRadius) {
                       otherBrick.active = false;
+                      if (!otherBrick.indestructible) {
+                        setBricksLeft(prev => Math.max(0, prev - 1));
+                      }
                       setScore(s => s + 5);
                       spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, otherBrick.color);
                       // Extra particles for "brutality"
@@ -2310,6 +2330,7 @@ export const Game: React.FC = () => {
           brick.hits--;
           if (brick.hits <= 0) {
             brick.active = false;
+            setBricksLeft(prev => Math.max(0, prev - 1));
             setScore(s => s + 10);
             spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
             spawnPowerUp(brick.x + brick.width / 2, brick.y + brick.height / 2);
@@ -3278,40 +3299,62 @@ export const Game: React.FC = () => {
         const pulse = Math.sin(Date.now() / (isDeath ? 100 : 200)) * (isDeath ? 4 : 2);
         const glow = Math.sin(Date.now() / (isDeath ? 75 : 150)) * (isDeath ? 15 : 5) + (isDeath ? 20 : 10);
         
+        // Animation - Spin/Flip effect + Bobbing
+        const spinTime = Date.now() / 250;
+        const bobTime = Date.now() / 400;
+        const spinScale = Math.cos(spinTime); // Simulate 3D flip (brick shape)
+        const bobOffset = Math.sin(bobTime) * 3;
+        
+        ctx.save();
+        ctx.translate(pu.x + POWERUP_WIDTH / 2, pu.y + POWERUP_HEIGHT / 2 + bobOffset);
+        ctx.scale(Math.abs(spinScale), 1.0); // Absolute scale for solid feel
+        ctx.translate(-(pu.x + POWERUP_WIDTH / 2), -(pu.y + POWERUP_HEIGHT / 2 + bobOffset));
+
         if (level === 3) {
-          // Atari style power-ups: blocky squares
+          // Atari style power-ups: blocky bricks
           ctx.fillStyle = isDeath ? '#ff0000' : '#e0e0e0';
           ctx.fillRect(pu.x, pu.y, POWERUP_WIDTH, POWERUP_HEIGHT);
+          
+          // Brick border
           ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1;
           ctx.strokeRect(pu.x, pu.y, POWERUP_WIDTH, POWERUP_HEIGHT);
           
           ctx.fillStyle = '#000000';
-          ctx.font = 'bold 12px monospace';
+          ctx.font = 'bold 10px monospace';
           ctx.textAlign = 'center';
-          ctx.fillText(pu.type[0].toUpperCase(), pu.x + POWERUP_WIDTH / 2, pu.y + POWERUP_HEIGHT / 2 + 4);
+          ctx.textBaseline = 'middle';
+          ctx.fillText(pu.type[0].toUpperCase(), pu.x + POWERUP_WIDTH / 2, pu.y + POWERUP_HEIGHT / 2);
         } else {
-          // 8-bit style: blocky square
+          // 8-bit style: blocky brick
           const isLife = pu.type === PowerUpType.EXTRA_LIFE;
-          ctx.fillStyle = (isDeath) ? '#ff0000' : '#ffffff'; // White background for life too
+          ctx.fillStyle = (isDeath) ? '#ff0000' : '#ffffff'; 
           ctx.shadowBlur = isLife ? glow : 0;
           ctx.shadowColor = isLife ? '#ff0000' : 'transparent';
           ctx.fillRect(pu.x, pu.y, POWERUP_WIDTH, POWERUP_HEIGHT);
           
+          // Bevel effect for brick look
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.fillRect(pu.x, pu.y, POWERUP_WIDTH, 2); // Top
+          ctx.fillRect(pu.x, pu.y, 2, POWERUP_HEIGHT); // Left
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          ctx.fillRect(pu.x, pu.y + POWERUP_HEIGHT - 2, POWERUP_WIDTH, 2); // Bottom
+          ctx.fillRect(pu.x + POWERUP_WIDTH - 2, pu.y, 2, POWERUP_HEIGHT); // Right
+
           // Simple border
           ctx.strokeStyle = (isDeath) ? '#ffffff' : (isLife ? '#ff0000' : '#00ffff');
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1;
           ctx.strokeRect(pu.x, pu.y, POWERUP_WIDTH, POWERUP_HEIGHT);
           
           ctx.shadowBlur = 0;
           
-          // Draw animal icon
+          // Draw icon
           if (isLife) {
-            // Drawn custom heart
+            // Drawn custom heart - centered in 40x20
             ctx.fillStyle = '#ff0000';
-            const px = pu.x + 4;
-            const py = pu.y + 7;
-            const pSize = 2.5;
+            const px = pu.x + 14; 
+            const py = pu.y + 4;
+            const pSize = 2.5; 
             const heart = [
               [0,1,0,1,0],
               [1,1,1,1,1],
@@ -3325,12 +3368,14 @@ export const Game: React.FC = () => {
               });
             });
           } else {
-            ctx.font = `${(isDeath ? 24 : 20) + pulse}px serif`;
+            ctx.font = `${(isDeath ? 18 : 16) + pulse/2}px serif`;
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
+            ctx.fillStyle = isDeath ? '#ffffff' : '#000000';
             ctx.fillText(POWERUP_ICONS[pu.type], pu.x + POWERUP_WIDTH / 2, pu.y + POWERUP_HEIGHT / 2);
           }
         }
+        ctx.restore();
       });
 
     // Draw Lasers
@@ -3453,7 +3498,7 @@ export const Game: React.FC = () => {
     >
       <div 
         className={`relative flex flex-col bg-black overflow-hidden
-          ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-[98vw] h-[98vh] max-w-none max-h-none shadow-[0_0_100px_rgba(0,255,0,0.1)] border border-green-500/20'}
+          ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-full h-full max-w-none max-h-none shadow-[0_0_100px_rgba(0,255,0,0.1)] border border-green-500/20'}
           [container-type:size] self-center transition-all duration-300`}
       >
         {/* HUD with Glass Effect Overlay - Stable v3.2.0 */}
@@ -3486,6 +3531,13 @@ export const Game: React.FC = () => {
                 <Heart className="w-[1.2cqw] h-[1.2cqw] text-red-500 fill-red-500" />
                 <span className="text-[1.4cqw] font-black text-red-400 leading-none">x{Math.min(lives, 10)}</span>
               </div>
+            </div>
+
+            <div className="h-[1.5cqw] w-[1px] bg-white/10" />
+
+            <div className="flex flex-col">
+              <span className="text-[0.45cqw] uppercase tracking-[0.2em] font-bold text-orange-500/60 font-mono leading-tight">Bricks</span>
+              <span className="text-[1.3cqw] font-black text-orange-400 leading-none">{bricksLeft.toString().padStart(3, '0')}</span>
             </div>
 
             <div className="h-[1.5cqw] w-[1px] bg-white/10 ml-[0.5cqw]" />
@@ -3604,7 +3656,7 @@ export const Game: React.FC = () => {
             ref={canvasRef}
             width={GAME_WIDTH}
             height={GAME_HEIGHT}
-            className="max-w-full max-h-full object-contain touch-none pointer-events-auto shadow-[0_0_50px_rgba(0,0,0,0.5)]"
+            className="w-full h-full object-fill touch-none pointer-events-auto"
           />
         </div>
 
@@ -3684,26 +3736,25 @@ export const Game: React.FC = () => {
                 ))}
               </div>
 
-              <div className="flex-1 flex flex-col items-center justify-center gap-[2cqh] w-full max-w-[90cqw] z-30 pt-[5cqh] pb-[15cqh]">
+              <div className="flex flex-col items-center justify-center gap-[1cqh] w-full max-w-[90cqw] z-30 pt-[2cqh] pb-[2cqh]">
                 <motion.div
                   animate={{
-                    scale: [1, 1.03, 1],
-                    rotate: [-0.5, 0.5, -0.5]
+                    scale: [1, 1.02, 1],
+                    rotate: [-0.3, 0.3, -0.3]
                   }}
                   transition={{ duration: 5, repeat: Infinity }}
                   className="text-center"
                 >
-                  <h1 className="text-[min(10cqw,12cqh)] font-black italic tracking-tighter text-white mb-[0.2cqw] drop-shadow-[0_0_30px_rgba(0,255,0,1)] leading-none">
+                  <h1 className="text-[min(9cqw,11cqh)] font-black italic tracking-tighter text-white mb-[0.1cqw] drop-shadow-[0_0_20px_rgba(0,255,0,0.8)] leading-none">
                     MEGABALL <span className="text-red-500">Ai</span><span className="text-green-500">GA</span>
                   </h1>
                 </motion.div>
 
                 <div className="text-center flex flex-col items-center">
-                  <p className="text-[2.2cqw] text-green-500/80 mb-[0.2cqw] uppercase tracking-[0.6em]">Commodore Amiga Tribute</p>
-                  <div className="px-[1cqw] py-[0.2cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.8cqw] text-green-400/60 font-mono tracking-widest mt-[-0.5cqw]">
-                    RELEASE v3.4.0429.2110
+                  <p className="text-[1.8cqw] text-green-500/80 mb-[0.1cqw] uppercase tracking-[0.5em]">Commodore Amiga 1200 Tribute</p>
+                  <div className="px-[1cqw] py-[0.1cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.7cqw] text-green-400/60 font-mono tracking-widest mt-[-0.2cqw]">
+                    RELEASE v3.5.0501.0730
                   </div>
-                  <p className="text-[1.3cqw] text-green-500/40 uppercase tracking-widest mt-[1.5cqh]">Click to activate sound & start</p>
                 </div>
 
                 {showOrientationPrompt && (
@@ -3717,94 +3768,94 @@ export const Game: React.FC = () => {
                 )}
               </div>
 
-                <div className="flex flex-col items-center gap-[1cqh]">
-                  <label htmlFor="level-select" className="text-[1.2cqw] text-green-500/60 uppercase tracking-widest">Select Starting Sector</label>
-                  <select 
-                    id="level-select"
-                    value={level}
-                    onChange={(e) => {
-                      const val = parseInt(e.target.value);
-                      setLevel(val);
-                      initBricks(val);
-                    }}
-                    className="bg-black text-green-500 border-2 border-green-500/50 px-[2cqw] py-[0.5cqw] rounded-sm text-[1.5cqw] font-bold focus:outline-none focus:border-green-400 cursor-pointer hover:bg-green-500/10 transition-colors"
-                  >
-                    {Array.from({ length: 100 }).map((_, i) => (
-                      <option key={i + 1} value={i + 1}>SECTOR {i + 1}</option>
-                    ))}
-                  </select>
-                </div>
+                  <div className="flex flex-col items-center gap-[0.8cqh] mb-[1.5cqh]">
+                    <label htmlFor="level-select" className="text-[1.2cqw] text-green-500/80 font-bold uppercase tracking-[0.3em]">
+                      Select Starting Sector
+                    </label>
+                    <div className="relative group">
+                      <select 
+                        id="level-select"
+                        value={level}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value);
+                          setLevel(val);
+                          initBricks(val);
+                        }}
+                        className="bg-black/80 text-green-400 border-2 border-green-500/40 px-[2.5cqw] py-[0.6cqw] rounded-lg text-[1.6cqw] font-black tracking-widest focus:outline-none focus:border-green-400 cursor-pointer hover:bg-green-500/10 transition-all appearance-none text-center min-w-[18cqw]"
+                      >
+                        {Array.from({ length: 100 }).map((_, i) => (
+                          <option key={i + 1} value={i + 1}>SECTOR {i + 1}</option>
+                        ))}
+                      </select>
+                      <div className="absolute right-[1.2cqw] top-1/2 -translate-y-1/2 pointer-events-none opacity-50 group-hover:opacity-100 transition-opacity">
+                        <ChevronDown className="w-[1.2cqw] h-[1.2cqw]" />
+                      </div>
+                    </div>
+                  </div>
                 
-                <div className="flex flex-wrap justify-center gap-[2cqw]">
-                  <button
-                    onClick={toggleFullscreen}
-                    className="p-[1.5cqw] bg-white/5 hover:bg-white/10 text-white/50 hover:text-white rounded-full transition-all transform hover:scale-110 border border-white/10"
-                    title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-                  >
-                    {isFullscreen ? <Minimize className="w-[2.5cqw] h-[2.5cqw]" /> : <Maximize className="w-[2.5cqw] h-[2.5cqw]" />}
-                  </button>
-
+                <div className="flex flex-wrap justify-center gap-[2cqw] mt-[1cqh]">
                   <button
                     onClick={() => startGame(false)}
-                    className="group relative flex items-center gap-[1.5cqw] px-[5cqw] py-[1.5cqw] bg-green-600 hover:bg-green-500 text-black font-black text-[2cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(0,255,0,0.4)]"
+                    className="group relative flex items-center gap-[1.2cqw] px-[4cqw] py-[1.4cqw] bg-green-600 hover:bg-green-500 text-black font-black text-[1.8cqw] rounded transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(0,255,0,0.3)] active:scale-95 overflow-hidden"
                   >
-                    <Play className="w-[2.5cqw] h-[2.5cqw]" fill="black" />
+                    <Play className="w-[2cqw] h-[2cqw]" fill="black" />
                     START MISSION
-                    <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-green-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute top-0 -left-[100%] w-full h-full bg-gradient-to-r from-transparent via-white/20 to-transparent group-hover:left-[100%] transition-all duration-1000" />
                   </button>
 
                   <button
                     onClick={() => startGame(true)}
-                    className="group relative flex items-center gap-[1.5cqw] px-[4cqw] py-[1.5cqw] bg-purple-600 hover:bg-purple-500 text-white font-black text-[1.8cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+                    className="group relative flex items-center gap-[1.2cqw] px-[3.5cqw] py-[1.4cqw] bg-purple-600 hover:bg-purple-500 text-white font-black text-[1.6cqw] rounded transition-all transform hover:scale-105 shadow-[0_0_40px_rgba(168,85,247,0.3)] active:scale-95"
                   >
-                    <Zap className="w-[2.5cqw] h-[2.5cqw]" fill="white" />
+                    <Zap className="w-[2cqw] h-[2cqw]" fill="white" />
                     INFINITY MODE
-                    <div className="absolute -inset-[0.4cqw] border-[0.15cqw] border-purple-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </button>
 
                   <button
                     onClick={() => setShowHallOfFame(true)}
-                    className="group relative flex items-center gap-[1.5cqw] px-[3cqw] py-[1.5cqw] bg-transparent border-2 border-yellow-500 text-yellow-500 font-black text-[1.5cqw] rounded-sm transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(234,179,8,0.2)]"
+                    className="group relative flex items-center gap-[1.2cqw] px-[2.5cqw] py-[1.4cqw] bg-black border-2 border-yellow-500/30 hover:border-yellow-500 text-yellow-500 font-black text-[1.4cqw] rounded transition-all transform hover:scale-105 shadow-[0_0_20px_rgba(234,179,8,0.1)] active:scale-95"
                   >
-                    <Trophy className="w-[2.5cqw] h-[2.5cqw]" />
+                    <Trophy className="w-[2cqw] h-[2cqw]" />
                     HALL OF FAME
                   </button>
                 </div>
 
-                <div className="grid grid-cols-4 gap-[2cqw] text-[1.1cqw] text-green-500/40 uppercase tracking-widest w-full max-w-[85cqw]">
-                  <div className="flex flex-col items-center">
-                    <span>Mouse / Arrows</span>
-                    <span className="text-green-500/70">Move Paddle</span>
+                {/* Operational Controls Info */}
+                <div className="mt-[1cqh] bg-black/40 border border-green-500/5 backdrop-blur-sm p-[1cqh] rounded-lg w-full max-w-[90cqw] grid grid-cols-4 gap-[1cqw] z-30">
+                  <div className="flex flex-col items-center p-[0.3cqw] border-r border-white/5 text-center">
+                    <span className="text-[0.9cqw] text-white/40 uppercase tracking-tighter mb-1">Navigation</span>
+                    <span className="text-[1cqw] text-green-400/80 font-bold uppercase">Mouse / Arrows</span>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span>Click / Space</span>
-                    <span className="text-green-500/70">Launch / Fire</span>
+                  <div className="flex flex-col items-center p-[0.4cqw] border-r border-white/5 text-center">
+                    <span className="text-[1cqw] text-white/40 uppercase tracking-tighter mb-1">Action / Fire</span>
+                    <span className="text-[1.1cqw] text-green-400 font-bold uppercase">Click / Space</span>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-purple-400 font-black">Key E (30 NRG)</span>
-                    <span className="text-white">Force Push</span>
+                  <div className="flex flex-col items-center p-[0.4cqw] border-r border-white/5 text-center">
+                    <span className="text-[1cqw] text-purple-400/60 uppercase tracking-tighter mb-1">Force Push</span>
+                    <span className="text-[1.1cqw] text-purple-400 font-bold uppercase">KEY E <span className="text-[0.8cqw] opacity-60">(30 NRG)</span></span>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-cyan-400 font-black">Key T (50 NRG)</span>
-                    <span className="text-white">Time Slow</span>
+                  <div className="flex flex-col items-center p-[0.4cqw] text-center">
+                    <span className="text-[1cqw] text-cyan-400/60 uppercase tracking-tighter mb-1">Time Slow</span>
+                    <span className="text-[1.1cqw] text-cyan-400 font-bold uppercase">KEY T <span className="text-[0.8cqw] opacity-60">(50 NRG)</span></span>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span>P Key</span>
-                    <span className="text-green-500/70">Pause Game</span>
+                  
+                  <div className="col-span-4 h-[1px] bg-white/5 my-[0.2cqh]" />
+
+                  <div className="col-span-4 flex justify-around items-center text-[0.9cqw] text-green-500/30 font-mono tracking-[0.2em] px-[2cqw]">
+                    <div className="flex items-center gap-2 text-white/30">
+                       PAUSE [P]
+                    </div>
+                    <div className="flex items-center gap-2 text-white/30">
+                       AUDIO [M]
+                    </div>
+                    <div className="flex items-center gap-2 text-white/30">
+                       FULLSCREEN [F]
+                    </div>
+                    <div className="flex items-center gap-2 text-white/30">
+                       MENU [ESC]
+                    </div>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span>M Key</span>
-                    <span className="text-green-500/70">Mute Audio</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span>F Key</span>
-                    <span className="text-green-500/70">Fullscreen</span>
-                  </div>
-                  <div className="flex flex-col items-center">
-                    <span>ESC Key</span>
-                    <span className="text-green-500/70">Exit Menu</span>
                 </div>
-              </div>
               
               <div className="absolute bottom-0 w-full bg-black/90 border-t-[0.4cqw] border-b-[0.4cqw] border-green-500 py-[1cqh] overflow-hidden z-20 h-[10cqh] flex items-center pointer-events-none shadow-[0_-10px_20px_rgba(0,255,0,0.1)]">
                 <RetroScroller text={SCROLLER_TEXT} />
