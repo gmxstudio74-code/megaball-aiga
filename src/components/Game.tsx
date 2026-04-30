@@ -540,7 +540,7 @@ export const Game: React.FC = () => {
     const rows = 28;
     const cols = currentLevel === 3 ? 48 : 24;
     
-    const offsetLeft = 80; // Even larger margin for 16:9 widescreen feel
+    const offsetLeft = 100; // Even larger margin for 16:9 widescreen feel
     const offsetTop = 70;
     const brickWidth = (GAME_WIDTH - offsetLeft * 2) / cols - BRICK_PADDING;
     const brickHeight = 16;
@@ -718,53 +718,82 @@ export const Game: React.FC = () => {
           }
         }
       } else {
-        const patternType = Math.floor(rng(seed) * 16);
-        const maxBrickRows = 18; 
+        const patternType = Math.floor(rng(seed) * 45); // Support far more pattern types
+        const maxBrickRows = 20; 
+        const patternMix = (currentLevel % 5 === 0); // Every 5th level is a hybrid pattern
 
         for (let r = 0; r < maxBrickRows; r++) {
           for (let c = 0; c < cols; c++) {
             let spawn = false;
-            const midR = 8, midC = 11.5;
-            const symC = c < 12 ? c : 23 - c; // Symmetrical column index
+            const midR = 9, midC = 11.5;
+            const symC = c < 12 ? c : 23 - c;
             const diffR = Math.abs(r - midR);
             const diffC = Math.abs(c - midC);
-            const symDiffC = Math.abs(symC - 5.5); 
+            const dist = Math.sqrt(diffR * diffR + diffC * diffC);
+            
+            const checkPattern = (type: number): boolean => {
+              switch(type) {
+                case 0: return r < 14 && symC >= (13-r); // Pyramid
+                case 1: return (diffR + Math.abs(symC - 8)) <= 10; // Diamond
+                case 2: return r < 16 && (symC % 3 < 2); // Vertical Bars
+                case 3: return r < 16 && (r % 3 < 2); // Horizontal Bars
+                case 4: return (r < 14) && (r === 0 || r === 13 || c === 0 || c === cols - 1); // Box
+                case 5: return (r < 14) && (r === 7 || c === 11 || c === 12); // Cross
+                case 6: return (r < 14) && (Math.abs(r - symC + 2) < 2); // V / X shape
+                case 7: return r < 14 && (Math.sin(symC * 0.5 + currentLevel) * 4 + 7 > r); // Waves (variant by level)
+                case 8: return (r < 14) && (r + symC < 14); // Corner clusters
+                case 9: { // Heart
+                  const heartX = (c - 11.5) / 8;
+                  const heartY = (r - 7) / 7;
+                  return Math.pow(heartX*heartX + heartY*heartY - 1, 3) - heartX*heartX*heartY*heartY*heartY <= 0;
+                }
+                case 10: return r < 16 && (r + c) % 2 === 0; // Checkerboard
+                case 11: return Math.floor(dist) % 4 === 0 && dist < 14; // Rings
+                case 12: { // Space Invader
+                  const invRows = [[0,0,1,0,0,0], [0,1,1,1,0,0], [1,1,1,1,1,1], [1,0,1,0,1,0], [1,1,1,1,1,1], [0,1,0,1,0,0]];
+                  return r < 6 && symC < 6 && invRows[r][Math.floor(symC)] === 1;
+                }
+                case 13: return r < 16 && (c % 6 === r % 6 || (6-c%6) === r % 6); // Zig Zag
+                case 14: return r < 16 && (r % 4 === 0 || c % 4 === 0); // Frame
+                case 15: return r < 14 && (r % 2 === 0 && symC % 2 === 0); // Grid/Dots
+                case 16: return dist < 8; // Solid Circle
+                case 17: return dist > 6 && dist < 10; // Hollow Circle/Torus
+                case 18: return r < 12 && (symC === 0 || symC === 5 || symC === 11); // Triple Pillars
+                case 19: return r < 14 && Math.abs(diffR - diffC) < 2; // X-Cross
+                case 20: return r < 12 && (r + symC) % 5 === 0; // Diagonal Mesh
+                case 21: return r < 14 && (r < 4 || r > 10 || symC < 3 || symC > 9); // Hollow Rect
+                case 22: return r < 14 && (r < symC && symC < 12 - r); // Hourglass
+                case 23: return r < 14 && (r > symC || symC > 12 - r); // Reversed Hourglass
+                case 24: return r < 16 && ((r*c) % 7 === 0); // Math Pattern 1
+                case 25: return r < 16 && ((r+c) % 7 < 3); // Wide Diagonals
+                case 26: return r < 15 && (Math.floor(r/3) % 2 === Math.floor(c/3) % 2); // Large Checker
+                case 27: return r < 14 && (symC % 4 === 0); // Vertical Stripes
+                case 28: return r < 4 || (r > 8 && r < 12); // Two horizontal bands
+                case 29: return r < 16 && (c < 4 || c > cols - 5); // Side bars only
+                case 30: return r < 14 && (c > 8 && c < 15); // Central block
+                case 31: return r < 12 && (Math.abs(r - 6) + Math.abs(symC - 6) === 6); // Small diamond outline
+                case 32: return r < 15 && (r % 5 === 0); // Horizontal thin lines
+                case 33: return r < 14 && (symC > r); // Triangle top-left
+                case 34: return r < 14 && (symC < r); // Triangle bottom-left
+                case 35: return r < 14 && (diffR < 3 || diffC < 3); // Fat Cross
+                case 36: return r < 16 && (Math.sin(r * 0.4) * 4 + 8 > symC); // Vertical Wave
+                case 37: return r < 14 && ((r ^ c) % 8 === 0); // XOR pattern
+                case 38: return r < 12 && (dist < 4 || (dist > 8 && dist < 11)); // Concentric Dots
+                case 39: return r < 15 && (c % 8 < 4); // Wide Vertical Stripes
+                case 40: return r < 14 && ((r+c) % 10 === 0 || (r-c) % 10 === 0); // Big X Grid
+                case 41: return r < 14 && (r*r + symC*symC) % 50 < 10; // Circular artifacts
+                case 42: return r < 12 && (Math.abs(Math.sin(dist)) > 0.7); // Ripples
+                case 43: return r < 14 && (c % 2 === 0 && r % 3 === 0); // Stipple
+                default: return r < 14 && rng(seed + r * 37 + symC) < 0.45; // Sparse Random
+              }
+            };
 
-            switch(patternType) {
-              case 0: spawn = r < 14 && symC >= (13-r); break; // Pyramid
-              case 1: spawn = (diffR + Math.abs(symC - 8)) <= 10; break; // Diamond
-              case 2: spawn = r < 16 && (symC % 3 < 2); break; // Vertical Bars
-              case 3: spawn = r < 16 && (r % 3 < 2); break; // Horizontal Bars
-              case 4: spawn = (r < 14) && (r === 0 || r === 13 || c === 0 || c === cols - 1); break; // Box
-              case 5: spawn = (r < 14) && (r === 7 || c === 11 || c === 12); break; // Cross
-              case 6: spawn = (r < 14) && (Math.abs(r - symC + 2) < 2); break; // V / X shape (adjusted for wider)
-              case 7: spawn = r < 14 && (Math.sin(symC * 0.5) * 4 + 7 > r); break; // Waves
-              case 8: spawn = (r < 14) && (r + symC < 14); break; // Corner clusters
-              case 9: // Heart
-                const heartX = (c - 11.5) / 8;
-                const heartY = (r - 7) / 7;
-                spawn = Math.pow(heartX*heartX + heartY*heartY - 1, 3) - heartX*heartX*heartY*heartY*heartY <= 0;
-                break;
-              case 10: // Checkerboard
-                spawn = r < 16 && (r + c) % 2 === 0;
-                break;
-              case 11: // Rings
-                const distToCenter = Math.sqrt(diffR * diffR + diffC * diffC);
-                spawn = Math.floor(distToCenter) % 4 === 0 && distToCenter < 14;
-                break;
-              case 12: // Space Invader (roughly)
-                const invaderRows = [
-                  [0,0,1,0,0,0], [0,1,1,1,0,0], [1,1,1,1,1,1], [1,0,1,0,1,0], [1,1,1,1,1,1], [0,1,0,1,0,0]
-                ];
-                if (r < 6 && symC < 6) spawn = invaderRows[r][Math.floor(symC)] === 1;
-                break;
-              case 13: // Zig Zag
-                spawn = r < 16 && (c % 6 === r % 6 || (6-c%6) === r % 6);
-                break;
-              case 14: // Frame within frame
-                spawn = r < 16 && (r % 4 === 0 || c % 4 === 0);
-                break;
-              default: spawn = r < 14 && rng(seed + r * 37 + symC) < 0.45; // Random Symmetric
+            if (patternMix) {
+              const type1 = Math.floor(rng(seed + 1) * 44);
+              const type2 = Math.floor(rng(seed + 2) * 44);
+              spawn = checkPattern(type1) && checkPattern(type2); // Intersection for complexity
+            } else {
+              spawn = checkPattern(patternType);
             }
 
             if (spawn) {
