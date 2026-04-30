@@ -4,11 +4,11 @@ export const GAME_HEIGHT = 720;
 
 export const PADDLE_WIDTH = 150;
 export const PADDLE_HEIGHT = 20;
-export const PADDLE_SPEED = 12;
-export const MOUSE_SENSITIVITY = 1.85; // Final bump for smooth trackpad feel
+export const PADDLE_SPEED = 10;
+export const MOUSE_SENSITIVITY = 1.2; 
 
 export const BALL_RADIUS = 10;
-export const INITIAL_BALL_SPEED = 8;
+export const INITIAL_BALL_SPEED = 5;
 
 export const BRICK_ROWS = 10;
 export const BRICK_COLS = 15;

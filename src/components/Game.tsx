@@ -1127,8 +1127,8 @@ export const Game: React.FC = () => {
         if (Math.abs(movementX) > 0.1) {
           setHasPaddleMovedSinceLevelStart(true);
         }
-        // Sensitivity boosted to 2.2x (was 1.5x) for better trackpad response
-        const scaleX = (GAME_WIDTH / rect.width) * MOUSE_SENSITIVITY * 2.2;
+        // Sensitivity reduced (was 2.2x) for better control
+        const scaleX = (GAME_WIDTH / rect.width) * MOUSE_SENSITIVITY * 1.3;
         paddleRef.current.x += movementX * scaleX;
       } else {
         // Normal movement (Touch or fallback)
@@ -1438,8 +1438,8 @@ export const Game: React.FC = () => {
         break;
       case PowerUpType.FAST_BALL:
         ballsRef.current.forEach(ball => {
-          ball.dx *= 1.4;
-          ball.dy *= 1.4;
+          ball.dx *= 1.2;
+          ball.dy *= 1.2;
         });
         setActivePowerUps(prev => {
           const next = new Map(prev);
@@ -1746,12 +1746,12 @@ export const Game: React.FC = () => {
         });
       }
 
-      // Speed up ball slightly over time
+      // Speed up ball very slightly over time
       const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
-      const maxSpeed = 15 + (level * 0.1);
+      const maxSpeed = 12 + (level * 0.1);
       if (currentSpeed < maxSpeed) {
-        ball.dx *= 1.0001;
-        ball.dy *= 1.0001;
+        ball.dx *= 1.00005;
+        ball.dy *= 1.00005;
       }
 
       // Wall collisions with strict clamping to prevent escaping the bounds
@@ -2477,8 +2477,8 @@ export const Game: React.FC = () => {
               }
               if (type === PowerUpType.FAST_BALL) {
                 ballsRef.current.forEach(b => {
-                  b.dx /= 1.4;
-                  b.dy /= 1.4;
+                  b.dx /= 1.2;
+                  b.dy /= 1.2;
                 });
               }
               if (type === PowerUpType.BIG_BALL) {
@@ -3812,7 +3812,7 @@ export const Game: React.FC = () => {
             } else if (type === PowerUpType.EXPLOSION) {
               setHasExplosion(false);
             } else if (type === PowerUpType.FAST_BALL) {
-              ballsRef.current.forEach(ball => { ball.dx /= 1.4; ball.dy /= 1.4; });
+              ballsRef.current.forEach(ball => { ball.dx /= 1.2; ball.dy /= 1.2; });
             } else if (type === PowerUpType.SLOW_BALL) {
               ballsRef.current.forEach(ball => { ball.dx /= 0.6; ball.dy /= 0.6; });
             } else if (type === PowerUpType.FIREBALL) {
