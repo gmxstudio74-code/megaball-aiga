@@ -7,6 +7,8 @@ class AudioService {
   private victoryMusic: HTMLAudioElement | null = null;
   private gameOverSound: HTMLAudioElement | null = null;
   private currentMusic: HTMLAudioElement | null = null;
+  private savedNormalMusic: HTMLAudioElement | null = null;
+  private savedNormalTime: number = 0;
   private isMuted: boolean = false;
   private isPlaylistMode: boolean = false;
 
@@ -134,22 +136,41 @@ class AudioService {
     if (this.isMuted) return;
     
     let targetMusic: HTMLAudioElement | null = null;
-    this.isPlaylistMode = false;
-
-    if (level === 3) {
+    const isSpecialLevel = level === 3;
+    
+    if (isSpecialLevel) {
       targetMusic = this.atariMusic;
     } else if (isInfinity) {
       targetMusic = this.infinityMusic;
     } else {
-      this.isPlaylistMode = true;
       targetMusic = this.playlist[this.currentPlaylistIndex];
     }
     
-    if (this.currentMusic && this.currentMusic !== targetMusic) {
-      this.currentMusic.pause();
+    if (this.currentMusic === targetMusic) return;
+
+    // Handle smooth transition
+    if (this.currentMusic) {
+      const oldMusic = this.currentMusic;
+      
+      // If we are moving TO level 3, save the old music speed/position
+      if (isSpecialLevel && this.isPlaylistMode) {
+        this.savedNormalMusic = oldMusic;
+        this.savedNormalTime = oldMusic.currentTime;
+      }
+
+      // Fade out current
+      const fadeOutInterval = setInterval(() => {
+        if (oldMusic.volume > 0.05) {
+          oldMusic.volume -= 0.05;
+        } else {
+          oldMusic.pause();
+          oldMusic.volume = 0.6;
+          clearInterval(fadeOutInterval);
+        }
+      }, 100);
     }
 
-    const isNewTrack = this.currentMusic !== targetMusic;
+    this.isPlaylistMode = !isSpecialLevel && !isInfinity;
     this.currentMusic = targetMusic;
 
     if (this.currentMusic) {
@@ -158,12 +179,33 @@ class AudioService {
           await this.audioContext.resume();
         }
         
-        if (isNewTrack) {
+        // If we are RE-entering normal play mode from level 3, restore saved track
+        if (!isSpecialLevel && !isInfinity && this.savedNormalMusic) {
+          const restoredIndex = this.playlist.indexOf(this.savedNormalMusic);
+          if (restoredIndex !== -1) {
+            this.currentPlaylistIndex = restoredIndex;
+          }
+          this.currentMusic = this.savedNormalMusic;
+          this.currentMusic.currentTime = this.savedNormalTime;
+          this.savedNormalMusic = null;
+          this.isPlaylistMode = true;
+        } else if (isSpecialLevel) {
           this.currentMusic.currentTime = 0;
         }
         
-        // Always try to play if we want music
+        this.currentMusic.volume = 0;
         await this.currentMusic.play();
+        
+        const fadeInMusic = this.currentMusic;
+        const fadeInInterval = setInterval(() => {
+          if (fadeInMusic.volume < 0.6) {
+            fadeInMusic.volume += 0.05;
+          } else {
+            fadeInMusic.volume = 0.6;
+            clearInterval(fadeInInterval);
+          }
+        }, 100);
+        
       } catch (e) {
         console.error("Playback failed:", e);
         this.playIntro();
