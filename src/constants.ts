@@ -29,7 +29,8 @@ export enum PowerUpType {
   FLOOR = 'FLOOR',
   EXPLOSION = 'EXPLOSION',
   BLACK_HOLE = 'BLACK_HOLE',
-  GHOST_PADDLE = 'GHOST_PADDLE'
+  GHOST_PADDLE = 'GHOST_PADDLE',
+  BIG_BALL = 'BIG_BALL'
 }
 
 export interface PowerUp {
@@ -62,6 +63,9 @@ export interface Particle {
   life: number;
   dx: number;
   dy: number;
+  gravityScale?: number;
+  rotation?: number;
+  rotationSpeed?: number;
 }
 
 export interface Star {
@@ -85,6 +89,7 @@ export interface Ball {
   spin?: number;
   lastInteractionFrame?: number;
   consecutiveWallHits?: number;
+  radiusScale?: number;
 }
 
 export type PhysicalObjectType = 'GEAR' | 'FAN' | 'MAGNET' | 'WARP_GATE' | 'CRUSHER' | 'CONVEYOR';

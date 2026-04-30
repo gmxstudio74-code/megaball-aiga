@@ -196,6 +196,8 @@ export const Game: React.FC = () => {
   const [ghostPaddleActive, setGhostPaddleActive] = useState(false);
   const [hasPaddleMovedSinceLevelStart, setHasPaddleMovedSinceLevelStart] = useState(false);
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
+  const [widePaddleTimers, setWidePaddleTimers] = useState<{time: number, id: number}[]>([]);
+  const widePaddleIdRef = useRef(0);
   const [isMobile, setIsMobile] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isSafari, setIsSafari] = useState(false);
@@ -456,6 +458,26 @@ export const Game: React.FC = () => {
   const keysPressedRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
+    // Dynamically calculate target width based on stackable wide paddle timers
+    // Base width decreases slightly with level for difficulty
+    const baseWidth = Math.max(60, PADDLE_WIDTH - (level * 0.6));
+    const targetWidth = Math.min(GAME_WIDTH / 2, baseWidth + (widePaddleTimers.length * 100));
+    
+    if (paddleRef.current.width !== targetWidth) {
+      const diff = targetWidth - paddleRef.current.width;
+      // Expand/contract symmetrically
+      paddleRef.current.x -= diff / 2;
+      paddleRef.current.width = targetWidth;
+      
+      // Clamp to boundaries
+      if (paddleRef.current.x < 0) paddleRef.current.x = 0;
+      if (paddleRef.current.x > GAME_WIDTH - targetWidth) {
+        paddleRef.current.x = GAME_WIDTH - targetWidth;
+      }
+    }
+  }, [widePaddleTimers, level]);
+
+  useEffect(() => {
     // Init stars
     const stars: Star[] = [];
     for (let i = 0; i < 100; i++) {
@@ -582,7 +604,7 @@ export const Game: React.FC = () => {
           width: brickWidth,
           height: brickHeight,
           color: colors[r % colors.length],
-          hits: 2, active: true, type: 'NORMAL'
+          hits: 1, active: true, type: 'NORMAL'
         });
         // Right
         bricks.push({
@@ -591,7 +613,7 @@ export const Game: React.FC = () => {
           width: brickWidth,
           height: brickHeight,
           color: colors[r % colors.length],
-          hits: 2, active: true, type: 'NORMAL'
+          hits: 1, active: true, type: 'NORMAL'
         });
       }
 
@@ -633,15 +655,7 @@ export const Game: React.FC = () => {
         });
       }
 
-      // 4. Indestructible platform divider
-      for(let i=0; i<cols; i++) {
-        if (i % 5 === 0) continue;
-        bricks.push({
-          x: offsetLeft + i * (brickWidth + BRICK_PADDING),
-          y: offsetTop + 380, 
-          width: brickWidth, height: 10, color: '#444444', active: true, hits: 1, indestructible: true, type: 'NORMAL'
-        });
-      }
+      // 4. Clean up / Simpler Layout - No indestructible platform divider in Level 3 anymore
       bricksRef.current = bricks;
     } else {
       // Creative Level Designs with STRICT Symmetry
@@ -937,7 +951,7 @@ export const Game: React.FC = () => {
       setHasExplosion(false);
     }
     const speed = INITIAL_BALL_SPEED + (level * 0.05);
-    const currentPaddleWidth = Math.max(70, PADDLE_WIDTH - (level * 0.3));
+    const baseWidth = Math.max(60, PADDLE_WIDTH - (level * 0.6));
     
     ballsRef.current = [{
       x: GAME_WIDTH / 2,
@@ -946,14 +960,15 @@ export const Game: React.FC = () => {
       dy: -speed,
       trail: [],
       isStuck: true, // Start with glue active
-      stuckOffset: currentPaddleWidth / 2,
+      stuckOffset: baseWidth / 2,
       isBlackHole: false,
       isFireball: false,
-      consecutiveWallHits: 0
+      consecutiveWallHits: 0,
+      radiusScale: 1
     }];
     console.log("Ball count after reset:", ballsRef.current.length);
-    paddleRef.current.x = (GAME_WIDTH - currentPaddleWidth) / 2;
-    paddleRef.current.width = currentPaddleWidth;
+    paddleRef.current.x = (GAME_WIDTH - baseWidth) / 2;
+    paddleRef.current.width = baseWidth;
     paddleRef.current.hasLaser = false;
     paddleRef.current.spawnTimer = 60; // Start spawn animation
     powerUpsRef.current = [];
@@ -1342,15 +1357,16 @@ export const Game: React.FC = () => {
       audioService.playVoice("Life lost!");
       setLives(l => l - 1);
       setActivePowerUps(new Map());
+      setWidePaddleTimers([]);
       setGhostPaddleActive(false);
       setIsFireballActive(false);
       setIsBlackHoleActive(false);
       setHasFloor(false);
       setHasExplosion(false);
+      ballsRef.current.forEach(ball => ball.radiusScale = 1);
       setTimeShiftActive(false);
       paddleRef.current.damageTimer = 1000;
       paddleRef.current.hasLaser = false;
-      paddleRef.current.width = PADDLE_WIDTH;
       setTimeout(() => {
         paddleRef.current.spawnTimer = 0; // Reset spawn timer for pop-in effect
         paddleRef.current.damageTimer = 0;
@@ -1369,12 +1385,7 @@ export const Game: React.FC = () => {
     
     switch (type) {
       case PowerUpType.WIDE_PADDLE:
-        paddleRef.current.width = PADDLE_WIDTH * 1.5;
-        setActivePowerUps(prev => {
-          const next = new Map(prev);
-          next.set(PowerUpType.WIDE_PADDLE, POWERUP_DURATION);
-          return next;
-        });
+        setWidePaddleTimers(prev => [...prev, { time: POWERUP_DURATION, id: widePaddleIdRef.current++ }]);
         break;
       case PowerUpType.LASER:
         paddleRef.current.hasLaser = true;
@@ -1490,19 +1501,47 @@ export const Game: React.FC = () => {
         });
         audioService.playSfx('powerup');
         break;
+      case PowerUpType.BIG_BALL:
+        ballsRef.current.forEach(ball => {
+          ball.radiusScale = 5;
+        });
+        setActivePowerUps(prev => {
+          const next = new Map(prev);
+          next.set(PowerUpType.BIG_BALL, POWERUP_DURATION);
+          return next;
+        });
+        break;
     }
   };
 
   const spawnParticles = (x: number, y: number, color: string) => {
-    for (let i = 0; i < 20; i++) {
+    // Sparkles
+    for (let i = 0; i < 15; i++) {
       particlesRef.current.push({
         x,
         y,
-        dx: (Math.random() - 0.5) * 10,
-        dy: (Math.random() - 0.5) * 10,
-        life: 1.0 + Math.random() * 0.5,
+        dx: (Math.random() - 0.5) * 8,
+        dy: (Math.random() - 0.5) * 8,
+        life: 0.8 + Math.random() * 0.4,
         color,
-        size: Math.random() * 4 + 1
+        size: Math.random() * 3 + 1,
+        gravityScale: 0
+      });
+    }
+
+    // Debris (Crumbling parts)
+    for (let i = 0; i < 8; i++) {
+      particlesRef.current.push({
+        x: x + (Math.random() - 0.5) * 20,
+        y: y + (Math.random() - 0.5) * 10,
+        dx: (Math.random() - 0.5) * 4,
+        dy: (Math.random() - 1.0) * 6, // Up and then fall
+        life: 1.2 + Math.random() * 0.8,
+        color,
+        size: Math.random() * 6 + 2, // Larger chunks
+        gravityScale: 0.25,
+        rotation: Math.random() * Math.PI * 2,
+        rotationSpeed: (Math.random() - 0.5) * 0.2
       });
     }
   };
@@ -1562,12 +1601,12 @@ export const Game: React.FC = () => {
       paddle.spawnTimer -= 1 * (delta / 16.67);
     }
 
-    // Move balls (frame-rate independent)
     ballsRef.current.forEach(ball => {
+      const r = BALL_RADIUS * (ball.radiusScale || 1);
       if (ball.isStuck) {
         const offset = ball.stuckOffset ?? (paddle.width / 2);
         ball.x = paddle.x + offset;
-        ball.y = GAME_HEIGHT - PADDLE_HEIGHT - BALL_RADIUS;
+        ball.y = GAME_HEIGHT - PADDLE_HEIGHT - r;
         
         // Update trail while stuck so it follows the paddle and doesn't leave a "ghost"
         ball.trail.push({ x: ball.x, y: ball.y });
@@ -1617,15 +1656,15 @@ export const Game: React.FC = () => {
       }
 
       // Wall collisions with strict clamping to prevent escaping the bounds
-      if (ball.x - BALL_RADIUS < 0) {
-        ball.x = BALL_RADIUS;
+      if (ball.x - r < 0) {
+        ball.x = r;
         ball.dx = Math.abs(ball.dx);
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
         // Prevent pure vertical movement near walls
         if (Math.abs(ball.dx) < 2) ball.dx = 2;
-      } else if (ball.x + BALL_RADIUS > GAME_WIDTH) {
-        ball.x = GAME_WIDTH - BALL_RADIUS;
+      } else if (ball.x + r > GAME_WIDTH) {
+        ball.x = GAME_WIDTH - r;
         ball.dx = -Math.abs(ball.dx);
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
         audioService.playSfx('wall');
@@ -1633,8 +1672,8 @@ export const Game: React.FC = () => {
         if (Math.abs(ball.dx) < 2) ball.dx = -2;
       }
 
-      if (ball.y - BALL_RADIUS < 0) {
-        ball.y = BALL_RADIUS;
+      if (ball.y - r < 0) {
+        ball.y = r;
         ball.dy = Math.abs(ball.dy);
         ball.isPiercing = false;
         ball.consecutiveWallHits = (ball.consecutiveWallHits || 0) + 1;
@@ -1660,7 +1699,7 @@ export const Game: React.FC = () => {
       if (Math.abs(ball.dx) < 1.5) ball.dx = ball.dx > 0 ? 1.5 : -1.5;
 
       // Floor collision
-      if (hasFloor && ball.y + BALL_RADIUS > GAME_HEIGHT - 10) {
+      if (hasFloor && ball.y + r > GAME_HEIGHT - 10) {
         ball.dy = -Math.abs(ball.dy);
         audioService.playSfx('paddle');
       }
@@ -1671,7 +1710,7 @@ export const Game: React.FC = () => {
           const dx = ball.x - obj.x;
           const dy = ball.y - obj.y;
           const dist = Math.sqrt(dx*dx + dy*dy);
-          if (dist < obj.radius + BALL_RADIUS) {
+          if (dist < obj.radius + r) {
             const target = physicalObjectsRef.current.find(o => o.id === obj.targetId);
             const now = Date.now();
             const lastInteraction = ball.lastInteractionFrame || 0;
@@ -1693,19 +1732,19 @@ export const Game: React.FC = () => {
 
       const paddleY = GAME_HEIGHT - PADDLE_HEIGHT;
       const ballPrevY = ball.y - ball.dy * speedMultiplier;
-      const isCrossingPaddle = ballPrevY + BALL_RADIUS <= paddleY && ball.y + BALL_RADIUS >= paddleY;
+      const isCrossingPaddle = ballPrevY + r <= paddleY && ball.y + r >= paddleY;
 
       // Paddle collision
       if (
         ball.dy > 0 && 
-        (isCrossingPaddle || (ball.y + BALL_RADIUS > paddleY - 10 && ball.y + BALL_RADIUS < GAME_HEIGHT)) && 
+        (isCrossingPaddle || (ball.y + r > paddleY - 10 && ball.y + r < GAME_HEIGHT)) && 
         ball.x > paddle.x - 10 &&
         ball.x < paddle.x + paddle.width + 10
       ) {
         if (activePowerUps.has(PowerUpType.GLUE)) {
           ball.isStuck = true;
           ball.stuckOffset = ball.x - paddle.x;
-          ball.y = paddleY - BALL_RADIUS;
+          ball.y = paddleY - r;
         } else {
           // Accurate reflection physics: angle based on hit position
           const relativeHitX = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
@@ -1719,7 +1758,7 @@ export const Game: React.FC = () => {
           ball.dy = -speed * Math.cos(bounceAngle);
           
           // Move ball outside paddle to prevent multi-hit logic errors
-          ball.y = paddleY - BALL_RADIUS - 2;
+          ball.y = paddleY - r - 2;
           
           // Ensure min horizontal velocity to avoid purely vertical paths
           if (Math.abs(ball.dx) < 2.0) ball.dx = ball.dx > 0 ? 2.0 : -2.0;
@@ -1738,10 +1777,10 @@ export const Game: React.FC = () => {
       if (
         ghostPaddleActive &&
         ball.dy > 0 &&
-        ball.y + BALL_RADIUS > ghostY &&
-        ball.y - BALL_RADIUS < ghostY + PADDLE_HEIGHT &&
-        ball.x + BALL_RADIUS > paddle.x - 20 &&
-        ball.x - BALL_RADIUS < paddle.x + paddle.width + 20
+        ball.y + r > ghostY &&
+        ball.y - r < ghostY + PADDLE_HEIGHT &&
+        ball.x + r > paddle.x - 20 &&
+        ball.x - r < paddle.x + paddle.width + 20
       ) {
         const hitPos = (ball.x - (paddle.x + paddle.width / 2)) / (paddle.width / 2);
         ball.dx = hitPos * INITIAL_BALL_SPEED * 1.5;
@@ -1757,29 +1796,29 @@ export const Game: React.FC = () => {
       const ballX = ball.x;
       const relevantBricks = bricksRef.current.filter(brick => 
         brick.active && 
-        ballY + BALL_RADIUS + 5 > brick.y && 
-        ballY - BALL_RADIUS - 5 < brick.y + brick.height &&
-        ballX + BALL_RADIUS + 5 > brick.x &&
-        ballX - BALL_RADIUS - 5 < brick.x + brick.width
+        ballY + r + 5 > brick.y && 
+        ballY - r - 5 < brick.y + brick.height &&
+        ballX + r + 5 > brick.x &&
+        ballX - r - 5 < brick.x + brick.width
       );
 
       let collidedThisFrame = false;
       for (const brick of relevantBricks) {
         // Simple bounding box check (very fast)
         if (
-          ball.x + BALL_RADIUS > brick.x &&
-          ball.x - BALL_RADIUS < brick.x + brick.width &&
-          ball.y + BALL_RADIUS > brick.y &&
-          ball.y - BALL_RADIUS < brick.y + brick.height
+          ball.x + r > brick.x &&
+          ball.x - r < brick.x + brick.width &&
+          ball.y + r > brick.y &&
+          ball.y - r < brick.y + brick.height
         ) {
           // Normal balls only hit one brick per frame to prevent rebound glitches
           if (!ball.isFireball && !ball.isPiercing && collidedThisFrame) continue;
           
           // Identify collision side by finding the shallowest penetration
-          const overlapLeft = (ball.x + BALL_RADIUS) - brick.x;
-          const overlapRight = (brick.x + brick.width) - (ball.x - BALL_RADIUS);
-          const overlapTop = (ball.y + BALL_RADIUS) - brick.y;
-          const overlapBottom = (brick.y + brick.height) - (ball.y - BALL_RADIUS);
+          const overlapLeft = (ball.x + r) - brick.x;
+          const overlapRight = (brick.x + brick.width) - (ball.x - r);
+          const overlapTop = (ball.y + r) - brick.y;
+          const overlapBottom = (brick.y + brick.height) - (ball.y - r);
           
           const minOverlap = Math.min(overlapLeft, overlapRight, overlapTop, overlapBottom);
           
@@ -1794,10 +1833,10 @@ export const Game: React.FC = () => {
               // Still need to bounce
               if (minOverlap === overlapLeft || minOverlap === overlapRight) {
                 ball.dx *= -1;
-                ball.x = minOverlap === overlapLeft ? brick.x - BALL_RADIUS : brick.x + brick.width + BALL_RADIUS;
+                ball.x = minOverlap === overlapLeft ? brick.x - r : brick.x + brick.width + r;
               } else {
                 ball.dy *= -1;
-                ball.y = minOverlap === overlapTop ? brick.y - BALL_RADIUS : brick.y + brick.height + BALL_RADIUS;
+                ball.y = minOverlap === overlapTop ? brick.y - r : brick.y + brick.height + r;
               }
               return; 
             }
@@ -1985,25 +2024,25 @@ export const Game: React.FC = () => {
               const ballPrevX = ball.x - (ball.dx * delta / 16.6); // Approximate prev pos
               const ballPrevY = ball.y - (ball.dy * delta / 16.6);
 
-              const hitLeft = ballPrevX + BALL_RADIUS <= brick.x;
-              const hitRight = ballPrevX - BALL_RADIUS >= brick.x + brick.width;
-              const hitTop = ballPrevY + BALL_RADIUS <= brick.y;
-              const hitBottom = ballPrevY - BALL_RADIUS >= brick.y + brick.height;
+              const hitLeft = ballPrevX + r <= brick.x;
+              const hitRight = ballPrevX - r >= brick.x + brick.width;
+              const hitTop = ballPrevY + r <= brick.y;
+              const hitBottom = ballPrevY - r >= brick.y + brick.height;
 
               if (hitLeft || hitRight) {
                 ball.dx *= -1;
-                ball.x = hitLeft ? brick.x - BALL_RADIUS : brick.x + brick.width + BALL_RADIUS;
+                ball.x = hitLeft ? brick.x - r : brick.x + brick.width + r;
               } else if (hitTop || hitBottom) {
                 ball.dy *= -1;
-                ball.y = hitTop ? brick.y - BALL_RADIUS : brick.y + brick.height + BALL_RADIUS;
+                ball.y = hitTop ? brick.y - r : brick.y + brick.height + r;
               } else {
                 // Fallback to minimal overlap if previous pos was already inside or ambiguous
                 if (minOverlap === overlapLeft || minOverlap === overlapRight) {
                   ball.dx = Math.abs(ball.dx) * (minOverlap === overlapLeft ? -1 : 1);
-                  ball.x = minOverlap === overlapLeft ? brick.x - BALL_RADIUS : brick.x + brick.width + BALL_RADIUS;
+                  ball.x = minOverlap === overlapLeft ? brick.x - r : brick.x + brick.width + r;
                 } else {
                   ball.dy = Math.abs(ball.dy) * (minOverlap === overlapTop ? -1 : 1);
-                  ball.y = minOverlap === overlapTop ? brick.y - BALL_RADIUS : brick.y + brick.height + BALL_RADIUS;
+                  ball.y = minOverlap === overlapTop ? brick.y - r : brick.y + brick.height + r;
                 }
               }
               
@@ -2022,7 +2061,7 @@ export const Game: React.FC = () => {
     });
 
     // Remove balls that fall out
-    ballsRef.current = ballsRef.current.filter(ball => ball.y - BALL_RADIUS < GAME_HEIGHT);
+    ballsRef.current = ballsRef.current.filter(ball => ball.y - (BALL_RADIUS * (ball.radiusScale || 1)) < GAME_HEIGHT);
 
     // Bottom collision (Lose life if no balls left)
     if (ballsRef.current.length === 0 && !isRespawning && gameState === 'PLAYING') {
@@ -2032,6 +2071,7 @@ export const Game: React.FC = () => {
     // Physical Objects Interaction
     const now = Date.now();
     ballsRef.current.forEach(ball => {
+      const r = BALL_RADIUS * (ball.radiusScale || 1);
       physicalObjectsRef.current.forEach(obj => {
         // Crusher Logic
         if (obj.type === 'CRUSHER') {
@@ -2056,14 +2096,14 @@ export const Game: React.FC = () => {
           const cH = obj.height!;
 
           if (
-            ball.x + BALL_RADIUS > cX &&
-            ball.x - BALL_RADIUS < cX + cW &&
-            ball.y + BALL_RADIUS > cY &&
-            ball.y - BALL_RADIUS < cY + cH
+            ball.x + r > cX &&
+            ball.x - r < cX + cW &&
+            ball.y + r > cY &&
+            ball.y - r < cY + cH
           ) {
             // Determine side of collision for proper bounce
-            const overlapX = Math.min(ball.x + BALL_RADIUS - cX, cX + cW - (ball.x - BALL_RADIUS));
-            const overlapY = Math.min(ball.y + BALL_RADIUS - cY, cY + cH - (ball.y - BALL_RADIUS));
+            const overlapX = Math.min(ball.x + r - cX, cX + cW - (ball.x - r));
+            const overlapY = Math.min(ball.y + r - cY, cY + cH - (ball.y - r));
 
             if (overlapX < overlapY) {
               ball.dx = ball.x < obj.x ? -Math.abs(ball.dx) : Math.abs(ball.dx);
@@ -2086,17 +2126,17 @@ export const Game: React.FC = () => {
           const cH = obj.height!;
 
           if (
-            ball.x + BALL_RADIUS > cX &&
-            ball.x - BALL_RADIUS < cX + cW &&
-            ball.y + BALL_RADIUS > cY &&
-            ball.y - BALL_RADIUS < cY + cH
+            ball.x + r > cX &&
+            ball.x - r < cX + cW &&
+            ball.y + r > cY &&
+            ball.y - r < cY + cH
           ) {
             const driftSpeed = 2.0;
             ball.dx += obj.direction === 'LEFT' ? -driftSpeed : driftSpeed;
             
             // Standard AABB bounce
-            const overlapX = Math.min(ball.x + BALL_RADIUS - cX, cX + cW - (ball.x - BALL_RADIUS));
-            const overlapY = Math.min(ball.y + BALL_RADIUS - cY, cY + cH - (ball.y - BALL_RADIUS));
+            const overlapX = Math.min(ball.x + r - cX, cX + cW - (ball.x - r));
+            const overlapY = Math.min(ball.y + r - cY, cY + cH - (ball.y - r));
 
             if (overlapX < overlapY) {
               ball.dx = ball.x < obj.x ? -Math.abs(ball.dx) : Math.abs(ball.dx);
@@ -2115,14 +2155,14 @@ export const Game: React.FC = () => {
         const dist = Math.sqrt(dx*dx + dy*dy);
 
         // Interaction range varies by object type
-        const sensorRange = obj.radius + BALL_RADIUS + (obj.type === 'FAN' ? 30 : (obj.type === 'MAGNET' ? 100 : 0));
+        const sensorRange = obj.radius + r + (obj.type === 'FAN' ? 30 : (obj.type === 'MAGNET' ? 100 : 0));
         
         if (dist < sensorRange) {
           const currentSpeed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
           
           // Solid collision for GEAR only (Fans/Magnets are traversable fields)
           if (obj.type === 'GEAR') {
-            const solidRadius = obj.radius + BALL_RADIUS;
+            const solidRadius = obj.radius + r;
             if (dist < solidRadius && dist > 0.1) {
               const nx = dx / dist;
               const ny = dy / dist;
@@ -2248,9 +2288,15 @@ export const Game: React.FC = () => {
       }
       
       particlesRef.current = particlesRef.current.filter(p => {
-        p.x += p.vx;
-        p.y += p.vy;
-        p.life -= 0.025; // Faster fade
+        p.x += p.dx;
+        p.y += p.dy;
+        if (p.gravityScale) {
+          p.dy += p.gravityScale;
+        }
+        if (p.rotationSpeed) {
+          p.rotation = (p.rotation || 0) + p.rotationSpeed;
+        }
+        p.life -= 0.015; // Slightly slower fade for better debris effect
         return p.life > 0;
       });
     }
@@ -2707,10 +2753,23 @@ export const Game: React.FC = () => {
 
     // Draw Particles
     particlesRef.current.forEach(p => {
-      ctx.globalAlpha = p.life;
+      ctx.globalAlpha = Math.min(1, p.life);
       ctx.fillStyle = p.color;
-      // Optimization: No shadows for small particles to save substantial CPU/GPU time
-      ctx.fillRect(p.x, p.y, p.size, p.size);
+      
+      if (p.rotation !== undefined) {
+        // Draw rotating debris chunk
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+        // Add a small detail to debris
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(-p.size / 2, p.size / 4, p.size, p.size / 4);
+        ctx.restore();
+      } else {
+        // Draw simple sparkle
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      }
     });
     ctx.globalAlpha = 1.0;
 
@@ -3253,41 +3312,54 @@ export const Game: React.FC = () => {
 
     // Draw Balls
     ballsRef.current.forEach(ball => {
+      const r = BALL_RADIUS * (ball.radiusScale || 1);
       if (level === 3) {
         // 8-bit style (square)
         ctx.shadowBlur = 0;
         ctx.fillStyle = ball.isFireball ? '#ff4400' : '#ffffff';
-        ctx.fillRect(ball.x - BALL_RADIUS, ball.y - BALL_RADIUS, BALL_RADIUS * 2, BALL_RADIUS * 2);
+        ctx.fillRect(ball.x - r, ball.y - r, r * 2, r * 2);
         
         // Simple 8-bit highlight
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-        ctx.fillRect(ball.x - BALL_RADIUS, ball.y - BALL_RADIUS, BALL_RADIUS, BALL_RADIUS);
+        ctx.fillRect(ball.x - r, ball.y - r, r, r);
       } else {
         // AGA style (round with trail)
         // Trail
         ball.trail.forEach((pos, i) => {
           ctx.globalAlpha = i / ball.trail.length * 0.5;
           ctx.beginPath();
-          ctx.arc(pos.x, pos.y, BALL_RADIUS * (i / ball.trail.length), 0, Math.PI * 2);
+          ctx.arc(pos.x, pos.y, r * (i / ball.trail.length), 0, Math.PI * 2);
           ctx.fillStyle = ball.isFireball ? '#ff4400' : '#ffffff';
           ctx.fill();
         });
         ctx.globalAlpha = 1.0;
 
         ctx.beginPath();
-        ctx.arc(ball.x, ball.y, BALL_RADIUS, 0, Math.PI * 2);
-        const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, BALL_RADIUS);
+        ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+        const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, r);
         if (ball.isBlackHole) {
           ballGrad.addColorStop(0, '#00ffff');
           ballGrad.addColorStop(0.5, '#000000');
           ballGrad.addColorStop(1, '#000000');
         } else {
-          ballGrad.addColorStop(0, ball.isFireball ? '#ffffff' : '#ffffff');
-          ballGrad.addColorStop(0.3, ball.isFireball ? '#ffaa00' : '#ffffff');
-          ballGrad.addColorStop(1, ball.isFireball ? '#ff0000' : '#888888');
+          const isBig = ball.radiusScale && ball.radiusScale > 1;
+          ballGrad.addColorStop(0, '#ffffff');
+          ballGrad.addColorStop(0.3, ball.isFireball ? '#ffaa00' : (isBig ? '#c084fc' : '#ffffff'));
+          ballGrad.addColorStop(1, ball.isFireball ? '#ff0000' : (isBig ? '#a855f7' : '#888888'));
         }
         ctx.fillStyle = ballGrad;
         ctx.fill();
+        
+        // Add glow for special balls
+        if (ball.isFireball || ball.isBlackHole || (ball.radiusScale && ball.radiusScale > 1)) {
+          ctx.save();
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = ball.isFireball ? '#ff4400' : (ball.isBlackHole ? '#00ffff' : '#a855f7');
+          ctx.beginPath();
+          ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
         
         // Ball glow
         ctx.shadowBlur = ball.isFireball ? 20 : (ball.isBlackHole ? 25 : 15);
@@ -3318,6 +3390,7 @@ export const Game: React.FC = () => {
         [PowerUpType.EXPLOSION]: '💥',
         [PowerUpType.BLACK_HOLE]: '🕳️',
         [PowerUpType.GHOST_PADDLE]: '👻',
+        [PowerUpType.BIG_BALL]: '🎱',
       };
 
       powerUpsRef.current.forEach(pu => {
@@ -3446,6 +3519,12 @@ export const Game: React.FC = () => {
     if (gameState !== 'PLAYING') return;
 
     const timer = setInterval(() => {
+      setWidePaddleTimers(prev => {
+        if (prev.length === 0) return prev;
+        const next = prev.map(t => ({ ...t, time: t.time - 100 })).filter(t => t.time > 0);
+        return next.length !== prev.length || next.some((t, i) => t.time !== prev[i].time) ? next : prev;
+      });
+
       setActivePowerUps(prev => {
         const next = new Map(prev);
         let changed = false;
@@ -3454,9 +3533,7 @@ export const Game: React.FC = () => {
           if (newTime <= 0) {
             next.delete(type);
             // Handle expiration effects
-            if (type === PowerUpType.WIDE_PADDLE) {
-              paddleRef.current.width = Math.max(60, PADDLE_WIDTH - (level * 0.6));
-            } else if (type === PowerUpType.LASER) {
+            if (type === PowerUpType.LASER) {
               paddleRef.current.hasLaser = false;
             } else if (type === PowerUpType.FLOOR) {
               setHasFloor(false);
@@ -3468,6 +3545,8 @@ export const Game: React.FC = () => {
               ballsRef.current.forEach(ball => { ball.dx /= 0.6; ball.dy /= 0.6; });
             } else if (type === PowerUpType.FIREBALL) {
               ballsRef.current.forEach(ball => { ball.isFireball = false; });
+            } else if (type === PowerUpType.BIG_BALL) {
+              ballsRef.current.forEach(ball => { ball.radiusScale = 1; });
             } else if (type === PowerUpType.GLUE) {
               ballsRef.current.forEach(ball => {
                 if (ball.isStuck) {
@@ -3588,7 +3667,10 @@ export const Game: React.FC = () => {
           {/* Tactical Display - Powerups Only */}
           <div className="flex items-center gap-[2cqw] relative z-20 h-full pointer-events-auto">
             <div className="flex gap-[0.8cqw] items-center">
-              {Array.from(activePowerUps.entries()).map(([type, time]) => {
+              {[
+                ...Array.from(activePowerUps.entries()).map(([type, time]) => ({ type, time, id: type.toString() })),
+                ...widePaddleTimers.map((t) => ({ type: PowerUpType.WIDE_PADDLE, time: t.time, id: `WIDE_${t.id}` }))
+              ].map(({ type, time, id }) => {
                 // Determine base duration for circular progress
                 let maxDur = 30000; 
                 if (type === PowerUpType.FAST_BALL || type === PowerUpType.SLOW_BALL) maxDur = 10000;
@@ -3598,7 +3680,7 @@ export const Game: React.FC = () => {
 
                 return (
                   <div 
-                    key={type}
+                    key={id}
                     className="relative w-[2.2cqw] h-[2.2cqw] flex items-center justify-center bg-black/40 backdrop-blur-sm rounded-sm border border-white/10 overflow-hidden shadow-inner"
                     title={`${type} - ${Math.ceil(time/1000)}s`}
                   >
