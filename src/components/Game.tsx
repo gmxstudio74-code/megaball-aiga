@@ -94,64 +94,81 @@ interface Brick {
 }
 
 const RetroScroller = React.memo(({ text }: { text: string }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const scrollerRef = useRef<HTMLDivElement>(null);
-  const charWidth = useRef(0);
-  const visibleChars = useRef(0);
 
   useEffect(() => {
-    const span = document.createElement('span');
-    span.className = 'scroller-char text-[4cqw] font-mono font-black text-white italic tracking-normal';
-    span.style.visibility = 'hidden';
-    span.style.position = 'absolute';
-    span.innerText = 'M';
-    document.body.appendChild(span);
-    charWidth.current = (span.getBoundingClientRect().width || 25) * 0.92;
-    document.body.removeChild(span);
-    
-    const updateVisible = () => {
-      if (containerRef.current) {
-        visibleChars.current = Math.ceil(containerRef.current.clientWidth / charWidth.current) + 12;
-      }
-    };
-    updateVisible();
-    window.addEventListener('resize', updateVisible);
-    return () => window.removeEventListener('resize', updateVisible);
-  }, []);
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d', { alpha: true });
+    if (!ctx) return;
 
-  useEffect(() => {
     let animationId: number;
     let offset = 0;
-    const speed = 2.4;
-    
-    const animate = () => {
-      offset = (offset + speed) % (text.length * charWidth.current);
+    const speed = 2.5;
+    const fullText = text + "          " + text; // Pad for wrap-around
+
+    let charWidth = 0;
+
+    const render = () => {
+      if (!containerRef.current) return;
       
-      if (scrollerRef.current) {
-        const startIndex = Math.floor(offset / charWidth.current);
-        const endIndex = startIndex + (visibleChars.current || 40);
-        
-        let html = '';
-        for (let i = startIndex; i < endIndex; i++) {
-          const idx = i % text.length;
-          const char = text[idx];
-          const x = i * charWidth.current - offset;
-          const content = char === " " ? "&nbsp;" : char;
-          html += `<span class="scroller-char absolute text-[4cqw] font-mono font-black text-white italic tracking-normal drop-shadow-[0_0_10px_rgba(0,255,0,0.8)]" style="left: ${x}px; transform: translateZ(0)">${content}</span>`;
-        }
-        scrollerRef.current.innerHTML = html;
+      const width = containerRef.current.clientWidth;
+      const height = containerRef.current.clientHeight;
+      
+      // Update canvas size if needed
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        charWidth = 0; // Trigger re-measure
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      
+      // Retro Font Style
+      const fontSize = Math.floor(height * 0.82);
+      ctx.font = `italic 900 ${fontSize}px "JetBrains Mono", monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+
+      if (charWidth === 0) {
+        charWidth = ctx.measureText('M').width;
       }
       
-      animationId = requestAnimationFrame(animate);
+      offset = (offset + speed) % (text.length * charWidth);
+      const time = Date.now() / 300; // Time factor for the wave movement
+
+      // Batch draw characters
+      const startIndex = Math.floor(offset / charWidth);
+      const visibleCount = Math.ceil(width / charWidth) + 1;
+
+      ctx.fillStyle = '#00ff00';
+      ctx.shadowBlur = 0; 
+      
+      for (let i = 0; i < visibleCount; i++) {
+        const charIdx = (startIndex + i) % text.length;
+        const char = text[charIdx];
+        const x = (startIndex + i) * charWidth - offset;
+        
+        // Sine Wave Calculation (Classic 8-bit style)
+        // Wave shifts based on X position and Time
+        const waveFrequency = 0.005;
+        const waveAmplitude = height * 0.15;
+        const yOffset = Math.sin(x * waveFrequency + time) * waveAmplitude;
+        
+        ctx.fillText(char, x, height / 2 + yOffset);
+      }
+
+      animationId = requestAnimationFrame(render);
     };
-    
-    animationId = requestAnimationFrame(animate);
+
+    animationId = requestAnimationFrame(render);
     return () => cancelAnimationFrame(animationId);
   }, [text]);
 
   return (
     <div ref={containerRef} className="w-full h-full relative overflow-hidden flex items-center">
-      <div ref={scrollerRef} className="contents" />
+      <canvas ref={canvasRef} className="w-full h-full pointer-events-none" />
     </div>
   );
 });
@@ -198,6 +215,8 @@ export const Game: React.FC = () => {
   const [isInfiniteMode, setIsInfiniteMode] = useState(false);
   const [widePaddleTimers, setWidePaddleTimers] = useState<{time: number, id: number}[]>([]);
   const widePaddleIdRef = useRef(0);
+  const [flashOpacity, setFlashOpacity] = useState(0);
+  const [sectorShow, setSectorShow] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [isSafari, setIsSafari] = useState(false);
@@ -939,6 +958,7 @@ export const Game: React.FC = () => {
     }
 
     setBricksLeft(bricks.filter(b => b.active && !b.indestructible).length);
+    setSectorShow(true);
   }, [setBricksLeft, audioService]);
 
   const resetBall = (keepLevel = false) => {
@@ -964,7 +984,8 @@ export const Game: React.FC = () => {
       isBlackHole: false,
       isFireball: false,
       consecutiveWallHits: 0,
-      radiusScale: 1
+      radiusScale: 1,
+      combo: 0
     }];
     console.log("Ball count after reset:", ballsRef.current.length);
     paddleRef.current.x = (GAME_WIDTH - baseWidth) / 2;
@@ -1100,12 +1121,13 @@ export const Game: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       
       if (document.pointerLockElement === containerRef.current) {
-        // Pointer Lock movement (PC) - Increased sensitivity and smoothed
+        // Pointer Lock movement (PC) - Increased sensitivity for trackpads/mice
         const movementX = (e as MouseEvent).movementX || 0;
-        if (Math.abs(movementX) > 0.3) {
+        if (Math.abs(movementX) > 0.1) {
           setHasPaddleMovedSinceLevelStart(true);
         }
-        const scaleX = (GAME_WIDTH / rect.width) * MOUSE_SENSITIVITY * 1.5;
+        // Sensitivity boosted to 2.2x (was 1.5x) for better trackpad response
+        const scaleX = (GAME_WIDTH / rect.width) * MOUSE_SENSITIVITY * 2.2;
         paddleRef.current.x += movementX * scaleX;
       } else {
         // Normal movement (Touch or fallback)
@@ -1347,12 +1369,14 @@ export const Game: React.FC = () => {
   const handleLifeLost = () => {
     if (lives <= 1) {
       setGameState('GAMEOVER');
+      setFlashOpacity(0.8);
       audioService.playGameOver();
       audioService.playVoice("Game over. You are defeated!");
       setIsRespawning(false);
       setLives(0);
     } else {
       setIsRespawning(true);
+      setFlashOpacity(0.5);
       audioService.playSfx('lose');
       audioService.playVoice("Life lost!");
       setLives(l => l - 1);
@@ -1449,6 +1473,30 @@ export const Game: React.FC = () => {
           next.set(PowerUpType.GLUE, POWERUP_DURATION);
           return next;
         });
+        break;
+      case PowerUpType.BIG_BALL:
+        ballsRef.current.forEach(ball => {
+          ball.radiusScale = 2.5;
+          ball.rotation = 0;
+        });
+        setActivePowerUps(prev => {
+          const next = new Map(prev);
+          next.set(PowerUpType.BIG_BALL, POWERUP_DURATION);
+          return next;
+        });
+        audioService.playVoice("Maximum Power!");
+        break;
+      case PowerUpType.CRUISER:
+        ballsRef.current.forEach(ball => {
+          ball.isCruiser = true;
+          ball.cruiserTimer = POWERUP_DURATION;
+        });
+        setActivePowerUps(prev => {
+          const next = new Map(prev);
+          next.set(PowerUpType.CRUISER, POWERUP_DURATION);
+          return next;
+        });
+        audioService.playVoice("Missile Lock!");
         break;
       case PowerUpType.FIREBALL:
         setIsFireballActive(true);
@@ -1550,6 +1598,20 @@ export const Game: React.FC = () => {
   const update = (delta: number) => {
     if (gameState !== 'PLAYING' || isRespawning) return;
 
+    // Update Cruiser timer and Big Ball rotation
+    ballsRef.current.forEach(ball => {
+      if (ball.isCruiser && ball.cruiserTimer !== undefined) {
+        ball.cruiserTimer -= delta;
+        if (ball.cruiserTimer <= 0) {
+          ball.isCruiser = false;
+        }
+      }
+      
+      if (ball.radiusScale && ball.radiusScale > 1) {
+        ball.rotation = (ball.rotation || 0) + 0.05 * (delta / 16.67);
+      }
+    });
+
     frameCountRef.current++;
     if (frameCountRef.current % 60 === 0) {
       console.log("Update running, balls count:", ballsRef.current.length, "delta:", delta);
@@ -1617,6 +1679,39 @@ export const Game: React.FC = () => {
       // Update trail
       ball.trail.push({ x: ball.x, y: ball.y });
       if (ball.trail.length > 10) ball.trail.shift();
+
+      // Cruiser guiding logic
+      if (ball.isCruiser && !ball.isStuck) {
+        let nearestBrick = null;
+        let minDist = Infinity;
+        bricksRef.current.forEach(brick => {
+          if (brick.active) {
+            const dx = (brick.x + brick.width / 2) - ball.x;
+            const dy = (brick.y + brick.height / 2) - ball.y;
+            const d = dx * dx + dy * dy;
+            if (d < minDist) {
+              minDist = d;
+              nearestBrick = brick;
+            }
+          }
+        });
+
+        if (nearestBrick) {
+          const nb = nearestBrick as any;
+          const targetX = nb.x + nb.width / 2;
+          const targetY = nb.y + nb.height / 2;
+          const dx = targetX - ball.x;
+          const dy = targetY - ball.y;
+          const angleToTarget = Math.atan2(dy, dx);
+          const currentAngle = Math.atan2(ball.dy, ball.dx);
+          const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
+          
+          // Smoother steering
+          const lerpAngle = currentAngle + (angleToTarget - currentAngle) * 0.15;
+          ball.dx = Math.cos(lerpAngle) * speed;
+          ball.dy = Math.sin(lerpAngle) * speed;
+        }
+      }
 
       ball.x += ball.dx * speedMultiplier;
       ball.y += ball.dy * speedMultiplier;
@@ -1701,6 +1796,7 @@ export const Game: React.FC = () => {
       // Floor collision
       if (hasFloor && ball.y + r > GAME_HEIGHT - 10) {
         ball.dy = -Math.abs(ball.dy);
+        ball.combo = 0; // Reset combo on floor hit
         audioService.playSfx('paddle');
       }
 
@@ -1756,6 +1852,8 @@ export const Game: React.FC = () => {
           const speed = Math.sqrt(ball.dx * ball.dx + ball.dy * ball.dy);
           ball.dx = speed * Math.sin(bounceAngle);
           ball.dy = -speed * Math.cos(bounceAngle);
+          
+          ball.combo = 0; // Reset combo on paddle hit
           
           // Move ball outside paddle to prevent multi-hit logic errors
           ball.y = paddleY - r - 2;
@@ -1886,7 +1984,12 @@ export const Game: React.FC = () => {
             if (brick.hits <= 0) {
               brick.active = false;
               setBricksLeft(prev => Math.max(0, prev - 1));
-              setScore(s => s + 10);
+              
+              // Combo scoring
+              ball.combo = (ball.combo || 0) + 1;
+              const comboBonus = ball.combo > 1 ? Math.min(ball.combo * 10, 500) : 0;
+              setScore(s => s + 10 + comboBonus);
+
               spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, brick.color);
               spawnPowerUp(brick.x + brick.width / 2, brick.y + brick.height / 2);
               audioService.playBreakSound();
@@ -1904,7 +2007,12 @@ export const Game: React.FC = () => {
                       if (Math.random() > 0.4) {
                         otherBrick.active = false;
                         setBricksLeft(prev => Math.max(0, prev - 1));
-                        setScore(s => s + 10);
+                        
+                        // Explosion splash also increments combo
+                        ball.combo = (ball.combo || 0) + 1;
+                        const splashBonus = ball.combo > 1 ? Math.min(ball.combo * 5, 250) : 0;
+                        setScore(s => s + 10 + splashBonus);
+
                         spawnParticles(otherBrick.x + otherBrick.width/2, otherBrick.y + otherBrick.height/2, otherBrick.color);
                         audioService.playBreakSound();
                       }
@@ -2337,6 +2445,17 @@ export const Game: React.FC = () => {
                   b.dy /= 1.4;
                 });
               }
+              if (type === PowerUpType.BIG_BALL) {
+                ballsRef.current.forEach(b => {
+                  b.radiusScale = 1;
+                  b.rotation = 0;
+                });
+              }
+              if (type === PowerUpType.CRUISER) {
+                ballsRef.current.forEach(b => {
+                  b.isCruiser = false;
+                });
+              }
               next.delete(type);
             } else {
               next.set(type, newTime);
@@ -2548,21 +2667,24 @@ export const Game: React.FC = () => {
       ctx.restore();
     }
 
-    // Draw Stars (For level 3, we draw them later with destination-over)
-    if (level !== 3) {
-      ctx.fillStyle = '#ffffff';
-      starsRef.current.forEach(star => {
-        ctx.globalAlpha = star.speed * 2;
-        ctx.fillRect(star.x, star.y, star.size, star.size);
-      });
-      ctx.globalAlpha = 1.0;
-    }
+      // Draw Stars (For level 3, we draw them later with destination-over)
+      if (level !== 3) {
+        ctx.fillStyle = '#ffffff';
+        starsRef.current.forEach(star => {
+          ctx.globalAlpha = star.speed * 2;
+          ctx.fillRect(star.x, star.y, star.size, star.size);
+        });
+        ctx.globalAlpha = 1.0;
+      }
 
     // Screen Shake START - Only for bricks and action elements
     ctx.save();
     if (brickShake > 0) {
       ctx.translate((Math.random() - 0.5) * brickShake * 2, (Math.random() - 0.5) * brickShake * 2);
     }
+
+    // Optimization: Disable shadows globally for the main drawing phase unless essential
+    ctx.shadowBlur = 0;
 
     // Draw Bricks
     bricksRef.current.forEach(brick => {
@@ -2604,9 +2726,6 @@ export const Game: React.FC = () => {
         // Neon Glow (AGA style)
         if (brick.indestructible) {
           // Metallic look for indestructible bricks
-          ctx.shadowBlur = 10;
-          ctx.shadowColor = '#ffffff';
-          
           const grad = ctx.createLinearGradient(brick.x, brick.y, brick.x + brick.width, brick.y + brick.height);
           grad.addColorStop(0, '#e0e0e0');
           grad.addColorStop(0.5, '#ffffff');
@@ -2620,18 +2739,20 @@ export const Game: React.FC = () => {
           ctx.fillRect(brick.x + brick.width - 6, brick.y + 4, 2, 2);
           ctx.fillRect(brick.x + 4, brick.y + brick.height - 6, 2, 2);
           ctx.fillRect(brick.x + brick.width - 6, brick.y + brick.height - 6, 2, 2);
-          
-          ctx.shadowBlur = 0;
         } else {
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = brick.color;
-          
           // Brick body with gradient
           const grad = ctx.createLinearGradient(brick.x, brick.y, brick.x, brick.y + brick.height);
           grad.addColorStop(0, brick.color);
           grad.addColorStop(1, 'rgba(0,0,0,0.5)');
           ctx.fillStyle = grad;
           ctx.fillRect(brick.x, brick.y, brick.width, brick.height);
+          
+          // Simplified "glow" using stroke instead of shadowBlur (MUCH faster)
+          ctx.strokeStyle = brick.color;
+          ctx.globalAlpha = 0.3;
+          ctx.lineWidth = 1;
+          ctx.strokeRect(brick.x - 1, brick.y - 1, brick.width + 2, brick.height + 2);
+          ctx.globalAlpha = 1.0;
           
           if (brick.hits > 1) {
             ctx.strokeStyle = '#ffffff';
@@ -2751,38 +2872,54 @@ export const Game: React.FC = () => {
       });
     }
 
-    // Draw Particles
-    particlesRef.current.forEach(p => {
-      ctx.globalAlpha = Math.min(1, p.life);
-      ctx.fillStyle = p.color;
-      
-      if (p.rotation !== undefined) {
-        // Draw rotating debris chunk
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rotation);
-        ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-        // Add a small detail to debris
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.fillRect(-p.size / 2, p.size / 4, p.size, p.size / 4);
-        ctx.restore();
-      } else {
-        // Draw simple sparkle
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-      }
-    });
-    ctx.globalAlpha = 1.0;
+    // Draw Particles - FAST BATCHING
+    if (particlesRef.current.length > 0) {
+      ctx.globalAlpha = 1.0;
+      // Pre-group or just draw without state changes
+      particlesRef.current.forEach(p => {
+        if (p.life <= 0) return;
+        ctx.globalAlpha = Math.min(1, p.life);
+        ctx.fillStyle = p.color;
+        
+        if (p.rotation !== undefined) {
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.rotation);
+          ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+          ctx.restore();
+        } else {
+          ctx.fillRect(p.x, p.y, p.size, p.size);
+        }
+      });
+      ctx.globalAlpha = 1.0;
+    }
 
     // Screen Shake END
     ctx.restore();
 
+    // Damage Flash
+    if (flashOpacity > 0) {
+      ctx.fillStyle = `rgba(255, 0, 0, ${flashOpacity})`;
+      ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    }
+
+    // Sector Intro
+    if (sectorShow && gameState === 'PLAYING') {
+      ctx.save();
+      ctx.font = 'black italic 80px "JetBrains Mono", monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = '#00ff00';
+      ctx.fillText(`SECTOR ${level}`, GAME_WIDTH / 2, GAME_HEIGHT / 2);
+      ctx.restore();
+    }
+
     // Draw Floor if active (Independent of shake)
     if (hasFloor) {
       ctx.fillStyle = 'rgba(59, 130, 246, 0.4)';
-      ctx.shadowBlur = 20;
-      ctx.shadowColor = '#3b82f6';
       ctx.fillRect(0, GAME_HEIGHT - 10, GAME_WIDTH, 10);
-      ctx.shadowBlur = 0;
       
       // Floor pulse effect
       const floorPulse = Math.sin(Date.now() / 200) * 0.2 + 0.4;
@@ -2821,10 +2958,8 @@ export const Game: React.FC = () => {
       ctx.translate(-centerX, -centerY);
       
       // Energy particles focusing inward
-      if (Math.random() > 0.2) {
+      if (Math.random() > 0.3) {
         ctx.fillStyle = '#ffffff';
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#00ff00';
         const dist = 40 * fadeAlpha;
         const angle = Math.random() * Math.PI * 2;
         ctx.fillRect(centerX + Math.cos(angle) * dist, centerY + Math.sin(angle) * dist, 3, 3);
@@ -3313,6 +3448,18 @@ export const Game: React.FC = () => {
     // Draw Balls
     ballsRef.current.forEach(ball => {
       const r = BALL_RADIUS * (ball.radiusScale || 1);
+      
+      // Update combo and handle floating text
+      if (ball.combo && ball.combo >= 3) {
+        ctx.save();
+        ctx.fillStyle = ball.combo >= 10 ? '#ef4444' : (ball.combo >= 5 ? '#f59e0b' : '#3b82f6');
+        ctx.font = `bold ${10 + Math.min(ball.combo, 20)}px "JetBrains Mono", monospace`;
+        ctx.textAlign = 'center';
+        ctx.globalAlpha = 0.8;
+        ctx.fillText(`x${ball.combo}`, ball.x, ball.y - r - 10);
+        ctx.restore();
+      }
+
       if (level === 3) {
         // 8-bit style (square)
         ctx.shadowBlur = 0;
@@ -3324,54 +3471,165 @@ export const Game: React.FC = () => {
         ctx.fillRect(ball.x - r, ball.y - r, r, r);
       } else {
         // AGA style (round with trail)
-        // Trail
+        // Trail - Optimized alpha and drawing
+        ctx.fillStyle = ball.isFireball ? '#ff4400' : '#ffffff';
         ball.trail.forEach((pos, i) => {
-          ctx.globalAlpha = i / ball.trail.length * 0.5;
-          ctx.beginPath();
-          ctx.arc(pos.x, pos.y, r * (i / ball.trail.length), 0, Math.PI * 2);
-          ctx.fillStyle = ball.isFireball ? '#ff4400' : '#ffffff';
-          ctx.fill();
+          if (i % 2 === 0) { // Draw fewer trail segments for performance
+            ctx.globalAlpha = i / ball.trail.length * 0.2;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, r * (i / ball.trail.length), 0, Math.PI * 2);
+            ctx.fill();
+          }
         });
         ctx.globalAlpha = 1.0;
 
-        ctx.beginPath();
-        ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
-        const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, r);
-        if (ball.isBlackHole) {
-          ballGrad.addColorStop(0, '#00ffff');
-          ballGrad.addColorStop(0.5, '#000000');
-          ballGrad.addColorStop(1, '#000000');
-        } else {
-          const isBig = ball.radiusScale && ball.radiusScale > 1;
-          ballGrad.addColorStop(0, '#ffffff');
-          ballGrad.addColorStop(0.3, ball.isFireball ? '#ffaa00' : (isBig ? '#c084fc' : '#ffffff'));
-          ballGrad.addColorStop(1, ball.isFireball ? '#ff0000' : (isBig ? '#a855f7' : '#888888'));
-        }
-        ctx.fillStyle = ballGrad;
-        ctx.fill();
-        
-        // Add glow for special balls
-        if (ball.isFireball || ball.isBlackHole || (ball.radiusScale && ball.radiusScale > 1)) {
+        if (ball.radiusScale && ball.radiusScale > 1) {
+          // Big Ball: Round, Rotating Checkered Texture, Deforming
           ctx.save();
-          ctx.shadowBlur = 15;
-          ctx.shadowColor = ball.isFireball ? '#ff4400' : (ball.isBlackHole ? '#00ffff' : '#a855f7');
+          ctx.translate(ball.x, ball.y);
+          ctx.rotate(ball.rotation || 0);
+          
+          // Inflatable deformation effect
+          const deformSpeed = Date.now() / 200;
+          const deformScaleX = 1 + Math.sin(deformSpeed) * 0.08;
+          const deformScaleY = 1 + Math.cos(deformSpeed) * 0.08;
+          ctx.scale(deformScaleX, deformScaleY);
+          
+          // Draw the ball base
           ctx.beginPath();
-          ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
-          ctx.fill();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.clip(); // Clip to circle shape
+
+          // Draw Checkered/Grid Texture
+          const gridSize = r / 2;
+          for (let ix = -r * 2; ix < r * 2; ix += gridSize) {
+            for (let iy = -r * 2; iy < r * 2; iy += gridSize) {
+              const isWhite = (Math.abs(ix / gridSize) + Math.abs(iy / gridSize)) % 2 === 0;
+              ctx.fillStyle = isWhite ? '#ffffff' : '#333333';
+              ctx.fillRect(ix, iy, gridSize, gridSize);
+            }
+          }
+          
+          // Outer border and shine
           ctx.restore();
-        }
-        
-        // Ball glow
-        ctx.shadowBlur = ball.isFireball ? 20 : (ball.isBlackHole ? 25 : 15);
-        ctx.shadowColor = ball.isFireball ? '#ff4400' : (ball.isBlackHole ? '#00ffff' : '#ffffff');
-        if (ball.isBlackHole) {
-          ctx.strokeStyle = '#00ffff';
+          ctx.save();
+          ctx.translate(ball.x, ball.y);
+          ctx.scale(deformScaleX, deformScaleY);
+          
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.strokeStyle = '#666666';
           ctx.lineWidth = 2;
           ctx.stroke();
+
+          // Highlight for 3D look
+          const shineGrad = ctx.createRadialGradient(-r/3, -r/3, r/10, 0, 0, r);
+          shineGrad.addColorStop(0, 'rgba(255, 255, 255, 0.4)');
+          shineGrad.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+          ctx.fillStyle = shineGrad;
+          ctx.beginPath();
+          ctx.arc(0, 0, r, 0, Math.PI * 2);
+          ctx.fill();
+          
+          ctx.restore();
+          
+          // Outer Glow
+          ctx.save();
+          ctx.shadowBlur = 15;
+          ctx.shadowColor = 'rgba(255, 255, 255, 0.3)';
+          ctx.beginPath();
+          ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.restore();
+
+        } else if (ball.isCruiser) {
+          // Cruiser Missile: Arrow-like, Flame trail
+          ctx.save();
+          ctx.translate(ball.x, ball.y);
+          const missileAngle = Math.atan2(ball.dy, ball.dx);
+          ctx.rotate(missileAngle);
+          
+          // Missile Body
+          ctx.fillStyle = '#cccccc';
+          ctx.beginPath();
+          ctx.moveTo(r * 1.5, 0); // Nose
+          ctx.lineTo(-r, -r * 0.7);
+          ctx.lineTo(-r, r * 0.7);
+          ctx.closePath();
+          ctx.fill();
+          
+          // Cockpit or stripes
+          ctx.fillStyle = '#333333';
+          ctx.fillRect(r * 0.2, -r * 0.2, r * 0.5, r * 0.4);
+          
+          // Fins
+          ctx.fillStyle = '#ff0000';
+          ctx.beginPath();
+          ctx.moveTo(-r, -r * 0.7);
+          ctx.lineTo(-r - 5, -r * 1.2);
+          ctx.lineTo(-r, -r * 0.3);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.moveTo(-r, r * 0.7);
+          ctx.lineTo(-r - 5, r * 1.2);
+          ctx.lineTo(-r, r * 0.3);
+          ctx.fill();
+          
+          // Flame effect
+          const flicker = Math.sin(Date.now() / 50) * 5 + 10;
+          const fGrad = ctx.createLinearGradient(-r, 0, -r - flicker, 0);
+          fGrad.addColorStop(0, '#ffffff');
+          fGrad.addColorStop(0.4, '#ffaa00');
+          fGrad.addColorStop(1, 'transparent');
+          ctx.fillStyle = fGrad;
+          ctx.beginPath();
+          ctx.moveTo(-r, -r * 0.4);
+          ctx.lineTo(-r - flicker, 0);
+          ctx.lineTo(-r, r * 0.4);
+          ctx.fill();
+          
+          ctx.restore();
+          
+          // Outer Glow for missile
+          ctx.save();
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#ff4400';
+          ctx.beginPath();
+          ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+          ctx.strokeStyle = 'rgba(255, 68, 0, 0.4)';
+          ctx.stroke();
+          ctx.restore();
+
+        } else {
+          // Standard ball or other special types
+          ctx.beginPath();
+          ctx.arc(ball.x, ball.y, r, 0, Math.PI * 2);
+          
+          if (ball.isFireball || ball.isBlackHole) {
+            const ballGrad = ctx.createRadialGradient(ball.x - 2, ball.y - 2, 1, ball.x, ball.y, r);
+            if (ball.isBlackHole) {
+              ballGrad.addColorStop(0, '#00ffff');
+              ballGrad.addColorStop(0.5, '#000000');
+              ballGrad.addColorStop(1, '#000000');
+            } else {
+              ballGrad.addColorStop(0, '#ffffff');
+              ballGrad.addColorStop(0.3, '#ffaa00');
+              ballGrad.addColorStop(1, '#ff0000');
+            }
+            ctx.fillStyle = ballGrad;
+          } else {
+            ctx.fillStyle = '#ffffff';
+          }
+          ctx.fill();
+          
+          if (ball.isFireball || ball.isBlackHole) {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, r + 2, 0, Math.PI * 2);
+            ctx.strokeStyle = ball.isFireball ? 'rgba(255, 68, 0, 0.4)' : 'rgba(0, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
         }
-        ctx.fill();
-        ctx.shadowBlur = 0;
-        ctx.closePath();
       }
     });
 
@@ -3391,6 +3649,7 @@ export const Game: React.FC = () => {
         [PowerUpType.BLACK_HOLE]: '🕳️',
         [PowerUpType.GHOST_PADDLE]: '👻',
         [PowerUpType.BIG_BALL]: '🎱',
+        [PowerUpType.CRUISER]: '🚀',
       };
 
       powerUpsRef.current.forEach(pu => {
@@ -3496,6 +3755,15 @@ export const Game: React.FC = () => {
     // Final restore removed since it was moved above
   }, [brickShake, paddleShake, level, bgImage, level3BgImage, isLevel3Intro, physicalObjects, ghostPaddleActive]);
 
+    // Update flashes and intro
+    useEffect(() => {
+      if (flashOpacity > 0) setFlashOpacity(prev => Math.max(0, prev - 0.05));
+      if (sectorShow && gameState === 'PLAYING') {
+        const timer = setTimeout(() => setSectorShow(false), 2000);
+        return () => clearTimeout(timer);
+      }
+    }, [flashOpacity, sectorShow, gameState]);
+
   useGameLoop((delta) => {
     update(delta);
     draw();
@@ -3546,7 +3814,15 @@ export const Game: React.FC = () => {
             } else if (type === PowerUpType.FIREBALL) {
               ballsRef.current.forEach(ball => { ball.isFireball = false; });
             } else if (type === PowerUpType.BIG_BALL) {
-              ballsRef.current.forEach(ball => { ball.radiusScale = 1; });
+              ballsRef.current.forEach(ball => { 
+                ball.radiusScale = 2.5; 
+                ball.rotation = 0;
+              });
+            } else if (type === PowerUpType.CRUISER) {
+              ballsRef.current.forEach(ball => {
+                ball.isCruiser = true;
+                ball.cruiserTimer = 30000; // 30 seconds
+              });
             } else if (type === PowerUpType.GLUE) {
               ballsRef.current.forEach(ball => {
                 if (ball.isStuck) {
@@ -3608,7 +3884,7 @@ export const Game: React.FC = () => {
           ${isFullscreen ? 'w-full h-full border-0 rounded-none' : 'w-full h-full max-w-none max-h-none shadow-[0_0_100px_rgba(0,255,0,0.1)] border border-green-500/20'}
           [container-type:size] self-center transition-all duration-300`}
       >
-        {/* HUD with Glass Effect Overlay - Stable v3.2.0 */}
+        {/* HUD with Glass Effect Overlay - Stable v0.8.0 */}
         <div className={`absolute top-0 left-0 w-full h-[4cqw] px-[1.5cqw] flex justify-between items-center z-30 transition-all duration-700
           bg-black/40 backdrop-blur-md border-b border-white/5 pointer-events-none
           ${isCursorHidden ? 'cursor-none' : ''} 
@@ -3863,7 +4139,7 @@ export const Game: React.FC = () => {
                 <div className="text-center flex flex-col items-center">
                   <p className="text-[1.8cqw] text-green-500/80 mb-[0.1cqw] uppercase tracking-[0.5em]">Commodore Amiga 1200 Tribute</p>
                   <div className="px-[1cqw] py-[0.1cqw] bg-green-500/10 border border-green-500/20 rounded text-[0.7cqw] text-green-400/60 font-mono tracking-widest mt-[-0.2cqw]">
-                    RELEASE v3.5.0501.0730
+                    RELEASE v0.8.0
                   </div>
                 </div>
 
