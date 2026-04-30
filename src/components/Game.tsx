@@ -718,86 +718,71 @@ export const Game: React.FC = () => {
           }
         }
       } else {
-        const patternType = Math.floor(rng(seed) * 45); // Support far more pattern types
-        const maxBrickRows = 20; 
-        const patternMix = (currentLevel % 5 === 0); // Every 5th level is a hybrid pattern
-
+        const maxBrickRows = 22; 
+        
+        // Procedural metadata for THIS level
+        const metaphorSeed = seed + 100;
+        const metaphor = Math.floor(rng(metaphorSeed) * 8); // 8 distinct procedural logic types
+        const density = 0.35 + (rng(seed + 1) * 0.3);
+        const symmetry = rng(seed + 2) < 0.8; // Most levels are symmetric
+        const mutation = rng(seed + 3); // Chance for "noise" or "glitch"
+        
         for (let r = 0; r < maxBrickRows; r++) {
           for (let c = 0; c < cols; c++) {
-            let spawn = false;
-            const midR = 9, midC = 11.5;
-            const symC = c < 12 ? c : 23 - c;
-            const diffR = Math.abs(r - midR);
-            const diffC = Math.abs(c - midC);
-            const dist = Math.sqrt(diffR * diffR + diffC * diffC);
+            const midR = 10;
+            const midC = (cols - 1) / 2;
+            const normR = (r - 8) / 10;
+            const normC = (c - midC) / 12;
+            const dist = Math.sqrt(normR * normR + normC * normC);
+            const angle = Math.atan2(normR, normC);
             
-            const checkPattern = (type: number): boolean => {
-              switch(type) {
-                case 0: return r < 14 && symC >= (13-r); // Pyramid
-                case 1: return (diffR + Math.abs(symC - 8)) <= 10; // Diamond
-                case 2: return r < 16 && (symC % 3 < 2); // Vertical Bars
-                case 3: return r < 16 && (r % 3 < 2); // Horizontal Bars
-                case 4: return (r < 14) && (r === 0 || r === 13 || c === 0 || c === cols - 1); // Box
-                case 5: return (r < 14) && (r === 7 || c === 11 || c === 12); // Cross
-                case 6: return (r < 14) && (Math.abs(r - symC + 2) < 2); // V / X shape
-                case 7: return r < 14 && (Math.sin(symC * 0.5 + currentLevel) * 4 + 7 > r); // Waves (variant by level)
-                case 8: return (r < 14) && (r + symC < 14); // Corner clusters
-                case 9: { // Heart
-                  const heartX = (c - 11.5) / 8;
-                  const heartY = (r - 7) / 7;
-                  return Math.pow(heartX*heartX + heartY*heartY - 1, 3) - heartX*heartX*heartY*heartY*heartY <= 0;
-                }
-                case 10: return r < 16 && (r + c) % 2 === 0; // Checkerboard
-                case 11: return Math.floor(dist) % 4 === 0 && dist < 14; // Rings
-                case 12: { // Space Invader
-                  const invRows = [[0,0,1,0,0,0], [0,1,1,1,0,0], [1,1,1,1,1,1], [1,0,1,0,1,0], [1,1,1,1,1,1], [0,1,0,1,0,0]];
-                  return r < 6 && symC < 6 && invRows[r][Math.floor(symC)] === 1;
-                }
-                case 13: return r < 16 && (c % 6 === r % 6 || (6-c%6) === r % 6); // Zig Zag
-                case 14: return r < 16 && (r % 4 === 0 || c % 4 === 0); // Frame
-                case 15: return r < 14 && (r % 2 === 0 && symC % 2 === 0); // Grid/Dots
-                case 16: return dist < 8; // Solid Circle
-                case 17: return dist > 6 && dist < 10; // Hollow Circle/Torus
-                case 18: return r < 12 && (symC === 0 || symC === 5 || symC === 11); // Triple Pillars
-                case 19: return r < 14 && Math.abs(diffR - diffC) < 2; // X-Cross
-                case 20: return r < 12 && (r + symC) % 5 === 0; // Diagonal Mesh
-                case 21: return r < 14 && (r < 4 || r > 10 || symC < 3 || symC > 9); // Hollow Rect
-                case 22: return r < 14 && (r < symC && symC < 12 - r); // Hourglass
-                case 23: return r < 14 && (r > symC || symC > 12 - r); // Reversed Hourglass
-                case 24: return r < 16 && ((r*c) % 7 === 0); // Math Pattern 1
-                case 25: return r < 16 && ((r+c) % 7 < 3); // Wide Diagonals
-                case 26: return r < 15 && (Math.floor(r/3) % 2 === Math.floor(c/3) % 2); // Large Checker
-                case 27: return r < 14 && (symC % 4 === 0); // Vertical Stripes
-                case 28: return r < 4 || (r > 8 && r < 12); // Two horizontal bands
-                case 29: return r < 16 && (c < 4 || c > cols - 5); // Side bars only
-                case 30: return r < 14 && (c > 8 && c < 15); // Central block
-                case 31: return r < 12 && (Math.abs(r - 6) + Math.abs(symC - 6) === 6); // Small diamond outline
-                case 32: return r < 15 && (r % 5 === 0); // Horizontal thin lines
-                case 33: return r < 14 && (symC > r); // Triangle top-left
-                case 34: return r < 14 && (symC < r); // Triangle bottom-left
-                case 35: return r < 14 && (diffR < 3 || diffC < 3); // Fat Cross
-                case 36: return r < 16 && (Math.sin(r * 0.4) * 4 + 8 > symC); // Vertical Wave
-                case 37: return r < 14 && ((r ^ c) % 8 === 0); // XOR pattern
-                case 38: return r < 12 && (dist < 4 || (dist > 8 && dist < 11)); // Concentric Dots
-                case 39: return r < 15 && (c % 8 < 4); // Wide Vertical Stripes
-                case 40: return r < 14 && ((r+c) % 10 === 0 || (r-c) % 10 === 0); // Big X Grid
-                case 41: return r < 14 && (r*r + symC*symC) % 50 < 10; // Circular artifacts
-                case 42: return r < 12 && (Math.abs(Math.sin(dist)) > 0.7); // Ripples
-                case 43: return r < 14 && (c % 2 === 0 && r % 3 === 0); // Stipple
-                default: return r < 14 && rng(seed + r * 37 + symC) < 0.45; // Sparse Random
-              }
-            };
+            const effectiveC = symmetry ? (c < cols/2 ? c : (cols - 1) - c) : c;
+            const symNormC = (effectiveC - midC/2) / 6;
 
-            if (patternMix) {
-              const type1 = Math.floor(rng(seed + 1) * 44);
-              const type2 = Math.floor(rng(seed + 2) * 44);
-              spawn = checkPattern(type1) && checkPattern(type2); // Intersection for complexity
-            } else {
-              spawn = checkPattern(patternType);
+            let spawn = false;
+            
+            // Unikátne procedurálne vzorce pre každú "metaforu"
+            switch(metaphor) {
+              case 0: // Waves & Fractal Oscillations
+                spawn = Math.abs(Math.sin(c * (0.2 + currentLevel * 0.01) + seed) * 6 + 10 - r) < (2 + Math.sin(r * 0.4) * 2);
+                break;
+              case 1: // Radial Geometry (Rings, Stars, Blobs)
+                const rings = Math.sin(dist * (2 + currentLevel % 7) - seed * 2);
+                spawn = rings > 0.3 && dist < 1.4 && r < 18;
+                break;
+              case 2: // Cellular / Organic Blobs
+                const blob = Math.sin(c * 0.4) + Math.cos(r * 0.4) + Math.sin(dist * 3 + seed);
+                spawn = blob > 0.6 && r < 20;
+                break;
+              case 3: // Architectural Grid / Mazes
+                const cStep = 3 + (currentLevel % 4);
+                const rStep = 2 + (currentLevel % 3);
+                spawn = (c % cStep === 0 || r % rStep === 0) && r < 16 && r > 1;
+                break;
+              case 4: // Symmetrical Bitwise Fractals (Sierpinski variations)
+                spawn = ((effectiveC ^ r) % (currentLevel % 12 + 4)) === 0 && r < 18;
+                break;
+              case 5: // Diamonds & Hourglasses
+                const diamond = Math.abs(normR) + Math.abs(symNormC);
+                spawn = diamond < (0.8 + currentLevel / 200) && r < 20;
+                break;
+              case 6: // Vertical Slices / Bars
+                const barFreq = 0.5 + (currentLevel % 5) * 0.1;
+                spawn = Math.sin(c * barFreq + seed) > 0 && r < (10 + Math.sin(c * 0.3) * 5);
+                break;
+              case 7: // Dense Random with Level-specific patterns
+                spawn = rng(seed + r * cols + c) < density && r < 16;
+                break;
             }
 
+            // Global mutation (glitches)
+            if (mutation < 0.15 && rng(seed + r * 31 + c) < 0.1) spawn = !spawn;
+            
+            // Ensure no bricks too low
+            if (r > 22) spawn = false;
+
             if (spawn) {
-              const propSeed = seed + r * 13 + symC;
+              const propSeed = seed + r * 13 + effectiveC;
               const rand = rng(propSeed);
               let type: BrickType = 'NORMAL';
               let color = COLORS.bricks[r % COLORS.bricks.length];
