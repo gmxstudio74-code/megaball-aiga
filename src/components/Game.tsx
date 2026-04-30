@@ -537,14 +537,13 @@ export const Game: React.FC = () => {
     const bricks: Brick[] = [];
     
     // Standard resolution for all levels
-    // Professional arcade resolution
-    const rows = 14; 
-    const cols = currentLevel === 3 ? 32 : 16; 
+    const rows = 28;
+    const cols = currentLevel === 3 ? 48 : 24;
     
-    const offsetLeft = 100; // Generous side margins for 16:9 feel
-    const offsetTop = 80;
+    const offsetLeft = 80; // Even larger margin for 16:9 widescreen feel
+    const offsetTop = 70;
     const brickWidth = (GAME_WIDTH - offsetLeft * 2) / cols - BRICK_PADDING;
-    const brickHeight = 20; // Slightly smaller for better proportions
+    const brickHeight = 16;
 
     const getLogoInfo = (r: number, c: number, midC: number) => {
       return { isLogo: false, isCentral: false, isArm: false };
@@ -596,8 +595,8 @@ export const Game: React.FC = () => {
         });
       }
 
-      // 2. The 8-BIT text layout (centered in 32 cols)
-      const startX = 4;
+      // 2. The 8-BIT text layout (centered in 48 cols)
+      const startX = 12;
       const startY = offsetTop + (brickHeight + BRICK_PADDING) * 3;
       const pattern = [
         " XXX  XXXX  XXXXX  XXXXX",
@@ -622,8 +621,8 @@ export const Game: React.FC = () => {
       });
 
       // 3. Colorful accents below the text
-      const accentY = 9;
-      for (let c = 2; c < cols - 2; c++) {
+      const accentY = 12;
+      for (let c = 4; c < cols - 4; c++) {
         bricks.push({
           x: offsetLeft + c * (brickWidth + BRICK_PADDING),
           y: offsetTop + accentY * (brickHeight + BRICK_PADDING),
@@ -636,10 +635,10 @@ export const Game: React.FC = () => {
 
       // 4. Indestructible platform divider
       for(let i=0; i<cols; i++) {
-        if (i % 4 === 0) continue;
+        if (i % 5 === 0) continue;
         bricks.push({
           x: offsetLeft + i * (brickWidth + BRICK_PADDING),
-          y: offsetTop + 280, 
+          y: offsetTop + 380, 
           width: brickWidth, height: 10, color: '#444444', active: true, hits: 1, indestructible: true, type: 'NORMAL'
         });
       }
@@ -720,37 +719,38 @@ export const Game: React.FC = () => {
         }
       } else {
         const patternType = Math.floor(rng(seed) * 16);
-        const maxBrickRows = 10; 
+        const maxBrickRows = 18; 
 
         for (let r = 0; r < maxBrickRows; r++) {
           for (let c = 0; c < cols; c++) {
             let spawn = false;
-            const midR = 5, midC = 7.5;
-            const symC = c < 8 ? c : 15 - c; // Symmetrical column index
+            const midR = 8, midC = 11.5;
+            const symC = c < 12 ? c : 23 - c; // Symmetrical column index
             const diffR = Math.abs(r - midR);
             const diffC = Math.abs(c - midC);
+            const symDiffC = Math.abs(symC - 5.5); 
 
             switch(patternType) {
-              case 0: spawn = r < 10 && symC >= (9-r); break; // Pyramid
-              case 1: spawn = (diffR + Math.abs(symC - 8)) <= 8; break; // Diamond
-              case 2: spawn = r < 10 && (symC % 3 < 2); break; // Vertical Bars
-              case 3: spawn = r < 10 && (r % 3 < 2); break; // Horizontal Bars
-              case 4: spawn = (r < 10) && (r === 0 || r === 9 || c === 0 || c === cols - 1); break; // Box
-              case 5: spawn = (r < 10) && (r === 5 || c === 7 || c === 8); break; // Cross
-              case 6: spawn = (r < 10) && (Math.abs(r - symC) < 2); break; // V / X shape 
-              case 7: spawn = r < 10 && (Math.sin(symC * 0.7) * 4 + 5 > r); break; // Waves
-              case 8: spawn = (r < 10) && (r + symC < 10); break; // Corner clusters
+              case 0: spawn = r < 14 && symC >= (13-r); break; // Pyramid
+              case 1: spawn = (diffR + Math.abs(symC - 8)) <= 10; break; // Diamond
+              case 2: spawn = r < 16 && (symC % 3 < 2); break; // Vertical Bars
+              case 3: spawn = r < 16 && (r % 3 < 2); break; // Horizontal Bars
+              case 4: spawn = (r < 14) && (r === 0 || r === 13 || c === 0 || c === cols - 1); break; // Box
+              case 5: spawn = (r < 14) && (r === 7 || c === 11 || c === 12); break; // Cross
+              case 6: spawn = (r < 14) && (Math.abs(r - symC + 2) < 2); break; // V / X shape (adjusted for wider)
+              case 7: spawn = r < 14 && (Math.sin(symC * 0.5) * 4 + 7 > r); break; // Waves
+              case 8: spawn = (r < 14) && (r + symC < 14); break; // Corner clusters
               case 9: // Heart
-                const heartX = (c - 7.5) / 6;
-                const heartY = (r - 4) / 5;
+                const heartX = (c - 11.5) / 8;
+                const heartY = (r - 7) / 7;
                 spawn = Math.pow(heartX*heartX + heartY*heartY - 1, 3) - heartX*heartX*heartY*heartY*heartY <= 0;
                 break;
               case 10: // Checkerboard
-                spawn = r < 10 && (r + c) % 2 === 0;
+                spawn = r < 16 && (r + c) % 2 === 0;
                 break;
               case 11: // Rings
                 const distToCenter = Math.sqrt(diffR * diffR + diffC * diffC);
-                spawn = Math.floor(distToCenter) % 3 === 0 && distToCenter < 10;
+                spawn = Math.floor(distToCenter) % 4 === 0 && distToCenter < 14;
                 break;
               case 12: // Space Invader (roughly)
                 const invaderRows = [
@@ -1777,7 +1777,6 @@ export const Game: React.FC = () => {
             if (brick.type === 'GHOST') {
               brick.hits = 0; // Destroy immediately
               brick.active = false;
-              setBricksLeft(prev => Math.max(0, prev - 1));
               setScore(s => s + 15);
               spawnParticles(brick.x + brick.width / 2, brick.y + brick.height / 2, 'rgba(255,255,255,0.5)');
               audioService.playSfx('wall');

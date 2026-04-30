@@ -46,7 +46,7 @@ export interface Laser {
   active: boolean;
 }
 
-export const POWERUP_WIDTH = 60;
+export const POWERUP_WIDTH = 40;
 export const POWERUP_HEIGHT = 20;
 export const POWERUP_SPEED = 4;
 
